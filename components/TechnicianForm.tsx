@@ -11,6 +11,7 @@ interface TechnicianFormProps {
 
 const DEFAULT_TECHNICIAN: Omit<Technician, 'id'> = {
     name: '',
+    nationality: '',
     specialization: '',
     phone: '',
     isAvailable: true,

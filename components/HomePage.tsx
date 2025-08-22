@@ -1,16 +1,22 @@
-
 import React from 'react';
-import { HomeModernIcon, WrenchScrewdriverIcon, ArrowLeftIcon } from './icons';
-import { Page, SiteSettings, AdvertisementSettings } from '../types';
+import { HomeModernIcon, WrenchScrewdriverIcon, ArrowLeftIcon, ShoppingBagIcon } from './icons';
+import { Page } from '../types';
 import AdvertisementBanner from './AdvertisementBanner';
+import { useData } from '../context/DataContext';
 
 interface HomePageProps {
   onNavigate: (page: Page) => void;
-  siteSettings: SiteSettings;
-  adSettings: AdvertisementSettings;
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onNavigate, siteSettings, adSettings }) => {
+const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
+  const { db } = useData();
+  const { siteSettings, adSettings } = db;
+  
+  const gridContainerClass = siteSettings.marketplaceEnabled
+    ? "grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto mt-8"
+    : "grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto mt-8";
+
+
   return (
     <div className="animate-fade-in">
       <div className="relative isolate overflow-hidden bg-gray-900">
@@ -34,9 +40,11 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, siteSettings, adSetting
 
       <div className="container mx-auto px-4 -mt-16 relative z-20 pb-12">
         {adSettings.isEnabled && adSettings.displayPages.includes('home') && adSettings.imageUrl && (
-            <AdvertisementBanner imageUrl={adSettings.imageUrl} linkUrl={adSettings.linkUrl} />
+            <div className="my-8">
+              <AdvertisementBanner imageUrl={adSettings.imageUrl} linkUrl={adSettings.linkUrl} />
+            </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto mt-8">
+        <div className={gridContainerClass}>
           
           <div className="bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center border border-gray-200 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
             <div className="bg-blue-100 text-blue-600 p-4 rounded-full mb-5 ring-4 ring-blue-50">
@@ -67,6 +75,23 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, siteSettings, adSetting
               <ArrowLeftIcon className="w-5 h-5"/>
             </button>
           </div>
+          
+          {siteSettings.marketplaceEnabled && (
+            <div className="bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center border border-gray-200 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
+                <div className="bg-purple-100 text-purple-600 p-4 rounded-full mb-5 ring-4 ring-purple-50">
+                <ShoppingBagIcon className="w-10 h-10" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-3">سوق الخدمات</h2>
+                <p className="text-gray-600 mb-8 flex-grow text-center">اكتشف أفضل مزودي الخدمات المحليين، من مغاسل الملابس إلى خدمات التنظيف، واطلبها بسهولة.</p>
+                <button 
+                onClick={() => onNavigate('marketplace')}
+                className="w-full flex items-center justify-center gap-2 bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors"
+                >
+                <span>اكتشف الآن</span>
+                <ArrowLeftIcon className="w-5 h-5"/>
+                </button>
+            </div>
+          )}
 
         </div>
       </div>

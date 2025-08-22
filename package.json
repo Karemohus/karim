@@ -12,7 +12,9 @@
     "@google/genai": "^1.13.0",
     "react-dom": "^19.1.1",
     "react": "^19.1.1",
-    "xlsx": "latest"
+    "xlsx": "latest",
+    "leaflet": "^1.9.4",
+    "react-leaflet": "^4.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

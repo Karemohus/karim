@@ -1,13 +1,15 @@
+
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { WrenchScrewdriverIcon } from './icons';
+import { Page } from '../types';
 
 interface LoginPageProps {
-    onLoginSuccess: () => void;
+    onNavigate: (page: Page) => void;
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
-  const [id, setId] = useState('');
+const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login } = useAuth();
@@ -15,11 +17,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const success = login(id, password);
-    if (success) {
-        onLoginSuccess();
+    const result = login(phone, password);
+    if (result === 'failed') {
+      setError('رقم الهاتف أو كلمة المرور غير صحيحة.');
     } else {
-      setError('المعرف أو كلمة المرور غير صحيحة.');
+        // App.tsx effect will handle navigation
     }
   };
 
@@ -31,24 +33,24 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 <div className="inline-block bg-indigo-100 p-4 rounded-full mb-4 ring-4 ring-indigo-50">
                     <WrenchScrewdriverIcon className="w-10 h-10 text-indigo-600" />
                 </div>
-                <h1 className="text-3xl font-bold text-gray-900">تسجيل الدخول للوحة التحكم</h1>
+                <h1 className="text-3xl font-bold text-gray-900">تسجيل الدخول</h1>
                 <p className="text-gray-500 mt-2">مرحباً بعودتك! أدخل بياناتك للوصول.</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                    <label htmlFor="id" className="block text-sm font-medium text-gray-700 mb-1">
-                        المعرف (ID)
+                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                        رقم الهاتف (أو معرف المسؤول)
                     </label>
                     <input
-                        id="id"
+                        id="phone"
                         type="text"
-                        value={id}
-                        onChange={(e) => setId(e.target.value)}
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 transition-shadow"
                         required
-                        autoComplete="username"
-                        placeholder="karim"
+                        autoComplete="tel"
+                        placeholder="05xxxxxxxx أو karim"
                     />
                 </div>
                 <div>
@@ -63,7 +65,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 transition-shadow"
                         required
                         autoComplete="current-password"
-                        placeholder="karim123"
+                        placeholder="••••••••"
                     />
                 </div>
                 
@@ -80,6 +82,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     تسجيل الدخول
                 </button>
             </form>
+             <p className="text-center text-sm text-gray-600 mt-6">
+                ليس لديك حساب؟{' '}
+                <button onClick={() => onNavigate('register')} className="font-semibold text-indigo-600 hover:text-indigo-500">
+                    أنشئ حسابًا جديدًا
+                </button>
+            </p>
         </div>
       </div>
     </div>

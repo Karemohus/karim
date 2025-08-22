@@ -1,27 +1,22 @@
-import React, { useState, useCallback } from 'react';
-import { MaintenanceAnalysis, AdvertisementSettings, MaintenanceCategory, SiteSettings, MaintenanceRequest, Technician, MaintenanceFeatureIconName, Review, MaintenanceConfirmationSettings, Page } from '../types';
-import { analyzeMaintenanceRequest } from '../services/geminiService';
-import { SparklesIcon, CogIcon, PhotoIcon, TrashIcon, ShieldCheckIcon, LockClosedIcon, ChatBubbleLeftEllipsisIcon, TagIcon, ReceiptPercentIcon, ArrowUturnLeftIcon, WrenchScrewdriverIcon, StarIcon, CheckCircleIcon, HomeModernIcon, BuildingOffice2Icon, ExclamationTriangleIcon, InformationCircleIcon, UserGroupIcon, DocumentTextIcon } from './icons';
-import { Part } from '@google/genai';
+import React, { useState } from 'react';
+import { MaintenanceAnalysis, MaintenanceCategory, MaintenanceRequest, Technician, MaintenanceFeatureIconName, Review, Page, CommonIssue, CommonIssueIconName, EmergencyService, EmergencyMaintenanceRequest, MaintenanceAdvice, MaintenanceOffer, MaintenanceJobPost } from '../types';
+import { analyzeMaintenanceRequest, getMaintenanceAdvice } from '../services/geminiService';
+import { SparklesIcon, CogIcon, PhotoIcon, TrashIcon, ShieldCheckIcon, LockClosedIcon, ChatBubbleLeftEllipsisIcon, TagIcon, ReceiptPercentIcon, ArrowUturnLeftIcon, WrenchScrewdriverIcon, StarIcon, CheckCircleIcon, HomeModernIcon, BuildingOffice2Icon, ExclamationTriangleIcon, UserGroupIcon, DocumentTextIcon, DropletIcon, ExclamationCircleIcon, FireIcon, ArrowDownCircleIcon, PowerIcon, SunIcon, LightBulbIcon, SnowflakeIcon, SpeakerWaveIcon, AdjustmentsHorizontalIcon, KeyIcon, CubeIcon, PaintBrushIcon, QuestionMarkCircleIcon, BugIcon, TruckIcon, BanknotesIcon } from './icons';
+import { Part } from '@google/ai';
 import AdvertisementBanner from './AdvertisementBanner';
 import AnalysisDisplay from './AnalysisDisplay';
 import ReviewsList from './ReviewsList';
 import ReviewForm from './ReviewForm';
 import Modal from './Modal';
 import InvoiceView from './InvoiceView';
+import AIMaintenanceGuide from './AIMaintenanceGuide';
+import MaintenanceJobPostForm from './MaintenanceJobPostForm';
+import { useAuth } from '../context/AuthContext';
+import { useData } from '../context/DataContext';
 
 
 interface MaintenancePageProps {
-  maintenanceCategories: MaintenanceCategory[];
-  technicians: Technician[];
-  adSettings: AdvertisementSettings;
-  siteSettings: SiteSettings;
-  onMaintenanceRequestSubmit: (data: Omit<MaintenanceRequest, 'id' | 'requestDate' | 'status' | 'problemCause' | 'solution' | 'amountPaid'>) => MaintenanceRequest;
-  reviews: Review[];
-  onReviewSubmit: (data: Omit<Review, 'id' | 'createdAt'>) => void;
-  maintenanceConfirmationSettings: MaintenanceConfirmationSettings;
   onNavigate: (page: Page) => void;
-  maintenanceRequests: MaintenanceRequest[]; // Added for warranty check
 }
 
 const fileToGenerativePart = async (file: File): Promise<Part> => {
@@ -54,6 +49,33 @@ const getFeatureIcon = (iconName: MaintenanceFeatureIconName) => {
     }
 };
 
+const getCommonIssueIcon = (iconName: CommonIssueIconName) => {
+    const iconClass = "h-8 w-8 text-indigo-600";
+    switch (iconName) {
+        case 'DropletIcon': return <DropletIcon className={iconClass} />;
+        case 'ExclamationCircleIcon': return <ExclamationCircleIcon className={iconClass} />;
+        case 'FireIcon': return <FireIcon className={iconClass} />;
+        case 'CogIcon': return <CogIcon className={iconClass} />;
+        case 'ArrowDownCircleIcon': return <ArrowDownCircleIcon className={iconClass} />;
+        case 'PowerIcon': return <PowerIcon className={iconClass} />;
+        case 'SunIcon': return <SunIcon className={iconClass} />;
+        case 'LightBulbIcon': return <LightBulbIcon className={iconClass} />;
+        case 'SnowflakeIcon': return <SnowflakeIcon className={iconClass} />;
+        case 'SpeakerWaveIcon': return <SpeakerWaveIcon className={iconClass} />;
+        case 'AdjustmentsHorizontalIcon': return <AdjustmentsHorizontalIcon className={iconClass} />;
+        case 'KeyIcon': return <KeyIcon className={iconClass} />;
+        case 'CubeIcon': return <CubeIcon className={iconClass} />;
+        case 'PaintBrushIcon': return <PaintBrushIcon className={iconClass} />;
+        case 'SparklesIcon': return <SparklesIcon className={iconClass} />;
+        case 'BuildingOffice2Icon': return <BuildingOffice2Icon className={iconClass} />;
+        case 'WrenchScrewdriverIcon': return <WrenchScrewdriverIcon className={iconClass} />;
+        case 'BugIcon': return <BugIcon className={iconClass} />;
+        case 'TruckIcon': return <TruckIcon className={iconClass} />;
+        case 'QuestionMarkCircleIcon': return <QuestionMarkCircleIcon className={iconClass} />;
+        default: return <CogIcon className={iconClass} />;
+    }
+};
+
 const FeatureCard: React.FC<{ icon: React.ReactNode; title: string; children: React.ReactNode }> = ({ icon, title, children }) => (
     <div className="text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-indigo-100 ring-4 ring-indigo-50">
@@ -71,39 +93,240 @@ type RequestLookupResult = {
   technician?: Technician | null;
 } | null;
 
-const MaintenancePage: React.FC<MaintenancePageProps> = ({ 
-  maintenanceCategories, 
-  technicians, 
-  adSettings, 
-  siteSettings, 
-  onMaintenanceRequestSubmit, 
-  reviews, 
-  onReviewSubmit,
-  maintenanceConfirmationSettings,
-  onNavigate,
-  maintenanceRequests
-}) => {
+type MaintenanceTab = 'ai' | 'bidding';
+
+const EmergencyRequestForm: React.FC<{
+    services: EmergencyService[];
+    onSubmit: (data: Omit<EmergencyMaintenanceRequest, 'id' | 'requestDate' | 'status'>) => void;
+    onCancel: () => void;
+}> = ({ services, onSubmit, onCancel }) => {
+    const [selectedServiceId, setSelectedServiceId] = useState<string>(services.length > 0 ? services[0].id : '');
+    const [userPhone, setUserPhone] = useState('');
+    const [isSubmitted, setIsSubmitted] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        if (!selectedServiceId) {
+            setError('الرجاء اختيار نوع الحالة الطارئة.');
+            return;
+        }
+        if (!userPhone.trim()) {
+            setError('الرجاء إدخال رقم الهاتف.');
+            return;
+        }
+        const selectedService = services.find(s => s.id === selectedServiceId);
+        if (selectedService) {
+            onSubmit({ serviceId: selectedService.id, serviceName: selectedService.name, userPhone });
+            setIsSubmitted(true);
+        }
+    };
+    
+    if (isSubmitted) {
+        return (
+            <div className="text-center p-6 sm:p-8 animate-fade-in">
+                <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                <h3 className="text-2xl font-bold text-gray-800">تم استلام طلب الطوارئ!</h3>
+                <p className="text-gray-600 mt-2 max-w-md mx-auto">سيتم الاتصال بك على الفور من قبل فريقنا المختص. الرجاء إبقاء هاتفك قيد الانتظار.</p>
+                <button onClick={onCancel} className="mt-8 bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors">
+                    إغلاق
+                </button>
+            </div>
+        );
+    }
+    
+    const selectedService = services.find(s => s.id === selectedServiceId);
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-6 p-4">
+            <div className="text-center">
+                <div className="inline-block bg-red-100 p-3 rounded-full ring-4 ring-red-50">
+                    <ExclamationTriangleIcon className="w-8 h-8 text-red-600"/>
+                </div>
+                <p className="mt-4 text-gray-700">هذا النموذج مخصص للحالات العاجلة فقط. سيتم التواصل معك بشكل فوري.</p>
+            </div>
+
+            <div>
+                <label htmlFor="emergencyService" className="block text-sm font-medium text-gray-700 mb-2">1. اختر نوع الحالة الطارئة</label>
+                <select
+                    id="emergencyService"
+                    value={selectedServiceId}
+                    onChange={(e) => setSelectedServiceId(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 bg-white"
+                    required
+                >
+                    {services.map(service => (
+                        <option key={service.id} value={service.id}>{service.name}</option>
+                    ))}
+                </select>
+                {selectedService && (
+                    <div className="mt-2 text-sm text-gray-600 bg-gray-100 p-3 rounded-md border">
+                        <p>{selectedService.description}</p>
+                        <p className="font-bold mt-1">رسوم المعاينة الطارئة: <span className="text-red-600">{selectedService.inspectionFee} ريال</span></p>
+                    </div>
+                )}
+            </div>
+            
+            <div>
+                <label htmlFor="emergencyPhone" className="block text-sm font-medium text-gray-700 mb-2">2. أدخل رقم هاتفك</label>
+                <input
+                    type="tel"
+                    id="emergencyPhone"
+                    value={userPhone}
+                    onChange={(e) => setUserPhone(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                    required
+                    placeholder="رقم الجوال للتواصل الفوري"
+                />
+            </div>
+            
+             {error && (
+                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded-md text-sm" role="alert">
+                    <p>{error}</p>
+                </div>
+            )}
+
+            <div className="pt-4 flex flex-col sm:flex-row-reverse gap-3">
+                <button type="submit" className="w-full flex-1 bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition-colors">
+                    إرسال طلب طوارئ
+                </button>
+                <button type="button" onClick={onCancel} className="w-full flex-1 bg-gray-200 text-gray-800 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    );
+};
+
+
+const MaintenancePage: React.FC<MaintenancePageProps> = ({ onNavigate }) => {
+  const { db, setMaintenanceRequests, setReviews, setEmergencyMaintenanceRequests, setMaintenanceJobPosts, setMaintenanceOffers } = useData();
+  const { maintenanceCategories, technicians, adSettings, siteSettings, reviews, maintenanceConfirmationSettings, maintenanceRequests, emergencyServices, pointsSettings } = db;
+  const { isAuthenticated, currentUser, updateUser, isUser } = useAuth();
+  
+  const [activeTab, setActiveTab] = useState<MaintenanceTab>('ai');
+
+  // AI Form State
   const [description, setDescription] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [userLocation, setUserLocation] = useState<string>('');
   const [files, setFiles] = useState<File[]>([]);
+  
   const [analysis, setAnalysis] = useState<MaintenanceAnalysis | null>(null);
-  const [suggestedTechnician, setSuggestedTechnician] = useState<Technician | null>(null);
-  const [inspectionFee, setInspectionFee] = useState<number>(0);
+  const [maintenanceAdvice, setMaintenanceAdvice] = useState<MaintenanceAdvice | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const [suggestedTechnician, setSuggestedTechnician] = useState<Technician | null>(null);
+  const [alternativeTechnicians, setAlternativeTechnicians] = useState<Technician[]>([]);
+  const [finalSelectedTechnician, setFinalSelectedTechnician] = useState<Technician | null>(null);
+
+  const [inspectionFee, setInspectionFee] = useState<number>(0);
   const [isSubmissionSuccessful, setIsSubmissionSuccessful] = useState(false);
   const [submittedRequest, setSubmittedRequest] = useState<MaintenanceRequest | null>(null);
-
-
-  // Request Lookup State
+  
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [isCheckingRequest, setIsCheckingRequest] = useState(false);
   const [requestLookupResult, setRequestLookupResult] = useState<RequestLookupResult>(null);
   const [viewingInvoice, setViewingInvoice] = useState<MaintenanceRequest | null>(null);
+  const [isGuideVisible, setIsGuideVisible] = useState(!sessionStorage.getItem('aiMaintenanceGuideDismissed'));
+  const [isEmergencyModalOpen, setIsEmergencyModalOpen] = useState(false);
 
   const features = siteSettings.maintenanceFeatures || [];
   const technicianReviews = reviews.filter(r => r.type === 'technician');
+
+  const handleMaintenanceRequestSubmit = (data: Omit<MaintenanceRequest, 'id' | 'requestDate' | 'status' | 'problemCause' | 'solution' | 'amountPaid' | 'paymentStatus' | 'amountPaidForInspection' | 'pointsAwarded' | 'pointsDiscountApplied'>, paymentDetails?: { amount: number }, pointsToUse?: number): MaintenanceRequest => {
+    if (pointsToUse && pointsToUse > 0 && currentUser && isUser) {
+        const updatedUser = { ...currentUser, points: currentUser.points - pointsToUse };
+        updateUser(updatedUser);
+    }
+
+    const newRequest: MaintenanceRequest = {
+        ...data,
+        id: `maint-req-${Date.now()}`,
+        requestDate: new Date().toISOString(),
+        status: 'جديد',
+        paymentStatus: paymentDetails ? 'مدفوع' : 'لم يتم الدفع',
+        amountPaidForInspection: paymentDetails ? paymentDetails.amount : 0,
+        userId: currentUser?.id,
+        pointsDiscountApplied: pointsToUse,
+        pointsAwarded: false,
+    };
+    setMaintenanceRequests(prev => [newRequest, ...prev]);
+    return newRequest;
+  };
+  
+  const onEmergencyMaintenanceRequestSubmit = (data: Omit<EmergencyMaintenanceRequest, 'id' | 'requestDate' | 'status'>) => {
+    const newRequest: EmergencyMaintenanceRequest = {
+        ...data,
+        id: `em-req-${Date.now()}`,
+        requestDate: new Date().toISOString(),
+        status: 'جديد',
+        userId: currentUser?.id,
+    };
+    setEmergencyMaintenanceRequests(prev => [newRequest, ...prev]);
+  };
+
+  const onReviewSubmit = (data: Omit<Review, 'id' | 'createdAt'>) => {
+    const newReview: Review = {
+        ...data,
+        id: `rev-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        userId: currentUser?.id,
+        pointsAwarded: false,
+    };
+    setReviews(prev => [newReview, ...prev]);
+  };
+  
+  const simulateBids = (jobPostId: string, categoryName: string) => {
+    const relevantTechnicians = technicians.filter(t => t.isAvailable && t.specialization === categoryName);
+    if (relevantTechnicians.length === 0) return;
+
+    // Create 1 to 3 bids
+    const numberOfBids = Math.floor(Math.random() * Math.min(relevantTechnicians.length, 3)) + 1;
+    const shuffledTechs = relevantTechnicians.sort(() => 0.5 - Math.random());
+    
+    for (let i = 0; i < numberOfBids; i++) {
+        const tech = shuffledTechs[i];
+        setTimeout(() => {
+            const newOffer: MaintenanceOffer = {
+                id: `offer-${jobPostId}-${tech.id}`,
+                jobPostId: jobPostId,
+                technicianId: tech.id,
+                technicianName: tech.name,
+                technicianRating: tech.rating,
+                technicianImageUrl: tech.imageUrl,
+                price: Math.floor(Math.random() * 251) + 50, // Random price between 50 and 300
+                notes: 'يمكنني البدء في العمل غداً. السعر يشمل قطع الغيار الأساسية.',
+                createdAt: new Date().toISOString(),
+                status: 'pending',
+            };
+            setMaintenanceOffers(prev => [...prev, newOffer]);
+        }, (i + 1) * 3000 + Math.random() * 2000); // Stagger bids
+    }
+  };
+  
+  const handleMaintenanceJobPostSubmit = (jobPostData: Omit<MaintenanceJobPost, 'id' | 'requestDate' | 'status' | 'userId'>): MaintenanceJobPost => {
+    const newJobPost: MaintenanceJobPost = {
+        ...jobPostData,
+        id: `job-${Date.now()}`,
+        requestDate: new Date().toISOString(),
+        status: 'open',
+        userId: currentUser?.id,
+    };
+    setMaintenanceJobPosts(prev => [newJobPost, ...prev]);
+
+    // SIMULATE BIDS
+    simulateBids(newJobPost.id, newJobPost.categoryName);
+    
+    return newJobPost;
+  };
+
+  const dismissGuide = () => {
+    sessionStorage.setItem('aiMaintenanceGuideDismissed', 'true');
+    setIsGuideVisible(false);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -115,9 +338,32 @@ const MaintenancePage: React.FC<MaintenancePageProps> = ({
   const removeFile = (index: number) => {
     setFiles(prevFiles => prevFiles.filter((_, i) => i !== index));
   };
+  
+  const processAnalysisResult = (result: Omit<MaintenanceAnalysis, 'category'>) => {
+    const fullAnalysis: MaintenanceAnalysis = {
+        ...result,
+        category: selectedCategory
+    };
+    setAnalysis(fullAnalysis);
+    
+    const categoryDetails = maintenanceCategories.find(cat => cat.name === selectedCategory);
+    setInspectionFee(categoryDetails?.inspectionFee || 0);
 
+    const technicianObject = technicians.find(t => t.name === result.suggested_technician);
+    setSuggestedTechnician(technicianObject || null);
+    setFinalSelectedTechnician(technicianObject || null);
+    
+    const locationTrimmed = userLocation.trim().toLowerCase();
+    const alternatives = technicians.filter(t => 
+        t.isAvailable &&
+        t.specialization === selectedCategory &&
+        t.id !== technicianObject?.id &&
+        (locationTrimmed ? (t.region.toLowerCase().includes(locationTrimmed) || locationTrimmed.includes(t.region.toLowerCase())) : true)
+    );
+    setAlternativeTechnicians(alternatives);
+  }
 
-  const handleSubmit = useCallback(async () => {
+  const handleInitialSubmit = async () => {
     if (!selectedCategory) {
       setError('الرجاء اختيار قسم الصيانة أولاً.');
       return;
@@ -129,46 +375,70 @@ const MaintenancePage: React.FC<MaintenancePageProps> = ({
     setIsLoading(true);
     setError(null);
     setAnalysis(null);
-    setSuggestedTechnician(null);
+    setMaintenanceAdvice(null);
 
     try {
       const imageParts = await Promise.all(files.map(fileToGenerativePart));
       const categoryDetails = maintenanceCategories.find(cat => cat.name === selectedCategory);
       const commonIssuesForCategory = categoryDetails?.commonIssues || [];
       
-      const result = await analyzeMaintenanceRequest(description, selectedCategory, imageParts, technicians, userLocation, commonIssuesForCategory);
-      
-      const fullAnalysis: MaintenanceAnalysis = {
-          ...result,
-          category: selectedCategory
-      };
-      
-      setInspectionFee(categoryDetails?.inspectionFee || 0);
-      setAnalysis(fullAnalysis);
+      const analysisPromise = analyzeMaintenanceRequest(description, selectedCategory, imageParts, technicians, userLocation, commonIssuesForCategory);
+      const advicePromise = getMaintenanceAdvice(description, selectedCategory);
 
-      const technicianObject = technicians.find(t => t.name === result.suggested_technician);
-      setSuggestedTechnician(technicianObject || null);
+      const [analysisResult, adviceResult] = await Promise.all([analysisPromise, advicePromise]);
+      
+      processAnalysisResult(analysisResult);
+      setMaintenanceAdvice(adviceResult);
 
-      setFiles([]);
     } catch (err) {
       console.error('Error analyzing maintenance request:', err);
       setError('عذرًا، حدث خطأ أثناء تحليل طلبك. الرجاء المحاولة مرة أخرى.');
     } finally {
       setIsLoading(false);
     }
-  }, [description, selectedCategory, files, maintenanceCategories, technicians, userLocation]);
+  };
+  
+  const handleFormSubmitClick = () => {
+    if (isAuthenticated) {
+        handleInitialSubmit();
+    } else {
+        localStorage.setItem('loginRedirect', JSON.stringify({ page: 'maintenance' }));
+        onNavigate('login');
+    }
+  };
 
-  const handleConfirmRequest = (userData: { userName: string; userPhone: string; userEmail?: string, address: string; latitude?: number; longitude?: number; }) => {
+  const handleTechnicianSelection = (technician: Technician) => {
+    setFinalSelectedTechnician(technician);
+  };
+  
+  const handleVisualProblemSelect = (issue: CommonIssue) => {
+    setDescription(`لدي مشكلة بخصوص: ${issue.name}.\n\n(يرجى إضافة المزيد من التفاصيل هنا...)`);
+    const textarea = document.getElementById('description');
+    if (textarea) textarea.focus();
+  };
+
+  const handleConfirmRequest = (userData: { userName: string; userPhone: string; userEmail?: string, address: string; latitude?: number; longitude?: number; }, paymentDetails?: { amount: number }, pointsUsed?: number) => {
       if (analysis) {
-          const newRequest = onMaintenanceRequestSubmit({
-              analysis,
+           const finalAnalysis: MaintenanceAnalysis = {
+              ...analysis,
+              suggested_technician: finalSelectedTechnician?.name || analysis.suggested_technician,
+              suggestion_reason: analysis.suggested_technician === finalSelectedTechnician?.name 
+                  ? analysis.suggestion_reason 
+                  : 'تم اختياره يدوياً من قبل العميل.',
+          };
+
+          const newRequest = handleMaintenanceRequestSubmit({
+              analysis: finalAnalysis,
               ...userData
-          });
+          }, paymentDetails, pointsUsed);
           setSubmittedRequest(newRequest);
           setAnalysis(null);
           setSuggestedTechnician(null);
+          setAlternativeTechnicians([]);
+          setFinalSelectedTechnician(null);
           setDescription('');
           setUserLocation('');
+          setFiles([]);
           setInspectionFee(0);
           setIsSubmissionSuccessful(true);
           window.scrollTo(0, 0);
@@ -208,6 +478,12 @@ const MaintenancePage: React.FC<MaintenancePageProps> = ({
   const handleResetForm = () => {
     setIsSubmissionSuccessful(false);
     setSubmittedRequest(null);
+    setDescription('');
+    setSelectedCategory('');
+    setUserLocation('');
+    setFiles([]);
+    setAnalysis(null);
+    setError(null);
   }
 
   const SubmissionSuccessDisplay = ({ submittedRequest }: { submittedRequest: MaintenanceRequest | null }) => {
@@ -289,9 +565,222 @@ const MaintenancePage: React.FC<MaintenancePageProps> = ({
   };
 
 
+  const renderContent = () => {
+    if (isSubmissionSuccessful) {
+        return <SubmissionSuccessDisplay submittedRequest={submittedRequest} />;
+    }
+
+    if (isLoading) {
+      return (
+        <div className="mt-8 text-center p-8 bg-white rounded-lg shadow-md border border-gray-200">
+            <CogIcon className="animate-spin h-12 w-12 mx-auto text-indigo-500" />
+            <p className="mt-4 text-lg font-semibold text-gray-700">يقوم الذكاء الاصطناعي بتحليل طلبك وتقديم نصائح أولية...</p>
+            <p className="text-gray-500">قد يستغرق الأمر بضع لحظات.</p>
+        </div>
+      );
+    }
+
+    if (analysis) {
+        return (
+            <AnalysisDisplay 
+                analysis={analysis} 
+                maintenanceAdvice={maintenanceAdvice}
+                suggestedTechnician={suggestedTechnician}
+                alternativeTechnicians={alternativeTechnicians}
+                selectedTechnician={finalSelectedTechnician}
+                onTechnicianSelect={handleTechnicianSelection}
+                inspectionFee={inspectionFee} 
+                onConfirmRequest={handleConfirmRequest} 
+                pointsSettings={pointsSettings}
+            />
+        );
+    }
+    
+    return (
+        <>
+            {isGuideVisible && <AIMaintenanceGuide onDismiss={dismissGuide} />}
+            {adSettings.isEnabled && adSettings.displayPages.includes('maintenance') && adSettings.imageUrl && (
+            <div className="mb-8">
+                <AdvertisementBanner imageUrl={adSettings.imageUrl} linkUrl={adSettings.linkUrl} />
+            </div>
+            )}
+            <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-gray-200">
+                 <div className="mb-6 border-b border-gray-200">
+                    <nav className="-mb-px flex space-x-4" aria-label="Tabs">
+                        <button
+                            onClick={() => setActiveTab('ai')}
+                            className={`flex items-center gap-2 whitespace-nowrap border-b-2 py-4 px-1 text-base font-medium ${activeTab === 'ai' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}`}
+                        >
+                            <SparklesIcon className="w-5 h-5"/>
+                            تشخيص ذكي
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('bidding')}
+                            className={`flex items-center gap-2 whitespace-nowrap border-b-2 py-4 px-1 text-base font-medium ${activeTab === 'bidding' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'}`}
+                        >
+                             <BanknotesIcon className="w-5 h-5"/>
+                            اطلب عروض أسعار
+                        </button>
+                    </nav>
+                </div>
+                
+                {activeTab === 'ai' && (
+                    <div className="animate-fade-in">
+                        <form onSubmit={(e) => { e.preventDefault(); handleFormSubmitClick(); }} className="space-y-6">
+                            <div>
+                                <label htmlFor="category" className="block text-base font-medium text-gray-700 mb-2">
+                                1. اختر قسم الصيانة
+                                </label>
+                                <select
+                                id="category"
+                                name="category"
+                                value={selectedCategory}
+                                onChange={(e) => setSelectedCategory(e.target.value)}
+                                className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow bg-white"
+                                required
+                                disabled={isLoading}
+                                >
+                                <option value="" disabled>-- الرجاء اختيار قسم --</option>
+                                {maintenanceCategories.map(cat => (
+                                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                ))}
+                                </select>
+                            </div>
+
+                            {selectedCategory && (
+                                <div className="animate-fade-in">
+                                    <label className="block text-base font-medium text-gray-700 mb-2">
+                                        2. حدد المشكلة الشائعة (اختياري)
+                                    </label>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                        {maintenanceCategories.find(cat => cat.name === selectedCategory)?.commonIssues.map(issue => (
+                                            <button
+                                                type="button"
+                                                key={issue.id}
+                                                onClick={() => handleVisualProblemSelect(issue)}
+                                                className="text-center p-3 bg-gray-50 rounded-lg border-2 border-gray-200 hover:border-indigo-500 hover:bg-indigo-50 transition-all duration-200 space-y-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                            >
+                                                {issue.iconName && getCommonIssueIcon(issue.iconName)}
+                                                <span className="block text-sm font-semibold text-gray-700">{issue.name}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div>
+                                <label htmlFor="userLocation" className="block text-base font-medium text-gray-700 mb-2">
+                                3. أدخل منطقتك أو حيك (لترشيح أقرب فني)
+                                </label>
+                                <input
+                                id="userLocation"
+                                type="text"
+                                value={userLocation}
+                                onChange={(e) => setUserLocation(e.target.value)}
+                                className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow bg-white"
+                                placeholder="مثال: جدة، حي السلامة"
+                                disabled={isLoading}
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="description" className="block text-base font-medium text-gray-700 mb-2">
+                                    4. صف مشكلة الصيانة بالتفصيل
+                                </label>
+                                <textarea
+                                    id="description"
+                                    rows={6}
+                                    className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow"
+                                    placeholder="مثال: يوجد تسريب مياه أسفل حوض المطبخ، والصنبور لا يغلق بإحكام."
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    disabled={isLoading}
+                                />
+                                <p className="text-sm text-gray-500 mt-2">كلما كان الوصف أكثر تفصيلاً، كان تحليل الذكاء الاصطناعي أكثر دقة.</p>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-base font-medium text-gray-700 mb-2">
+                                5. إرفاق صور (اختياري)
+                                </label>
+                                <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                                <div className="space-y-1 text-center">
+                                    <PhotoIcon className="mx-auto h-12 w-12 text-gray-400" />
+                                    <div className="flex text-sm text-gray-600 justify-center">
+                                    <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500 px-1">
+                                        <span>اختر ملفات</span>
+                                        <input id="file-upload" name="file-upload" type="file" className="sr-only" multiple accept="image/*" onChange={handleFileChange} disabled={isLoading}/>
+                                    </label>
+                                    <p className="pl-1">أو اسحبها وأفلتها هنا</p>
+                                    </div>
+                                    <p className="text-xs text-gray-500">
+                                    ملفات صور (PNG, JPG)
+                                    </p>
+                                </div>
+                                </div>
+                            </div>
+
+                            {files.length > 0 && (
+                                <div className="mt-4">
+                                    <p className="font-medium text-gray-700">الملفات المحددة:</p>
+                                    <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                        {files.map((file, index) => (
+                                            <div key={index} className="relative group">
+                                                <img src={URL.createObjectURL(file)} alt={`preview ${index}`} className="h-28 w-full object-cover rounded-md border border-gray-200" />
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => removeFile(index)} 
+                                                    aria-label="Remove file"
+                                                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    disabled={isLoading}
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {error && (
+                                <div className="mt-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg" role="alert">
+                                    <p className="font-bold">خطأ</p>
+                                    <p>{error}</p>
+                                </div>
+                            )}
+
+                            <button
+                                type="submit"
+                                disabled={isLoading || !description.trim() || !selectedCategory}
+                                className="mt-8 w-full flex items-center justify-center gap-3 bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 disabled:bg-indigo-400 disabled:cursor-not-allowed"
+                            >
+                                {isLoading ? (
+                                <>
+                                    <CogIcon className="animate-spin h-5 w-5" />
+                                    <span>جاري التحليل...</span>
+                                </>
+                                ) : (
+                                'حلّل الطلب بالذكاء الاصطناعي'
+                                )}
+                            </button>
+                        </form>
+                    </div>
+                )}
+                 {activeTab === 'bidding' && (
+                    <div className="animate-fade-in">
+                       <MaintenanceJobPostForm 
+                          onNavigate={onNavigate}
+                          onSubmit={handleMaintenanceJobPostSubmit}
+                       />
+                    </div>
+                )}
+            </div>
+        </>
+    );
+  }
+
   return (
     <div className="animate-fade-in bg-gray-50">
-        {/* Hero Section */}
         <div className="relative bg-gray-800 py-24 sm:py-32">
             <img
                 src={siteSettings.maintenancePageImageUrl}
@@ -308,8 +797,19 @@ const MaintenancePage: React.FC<MaintenancePageProps> = ({
                 </p>
             </div>
         </div>
+        
+        <div className="py-12 bg-gray-50">
+          <div className="container mx-auto px-4 relative z-10">
+              <button
+                  onClick={() => setIsEmergencyModalOpen(true)}
+                  className="w-full max-w-4xl mx-auto flex items-center justify-center gap-4 bg-red-600 text-white font-bold py-5 px-6 rounded-2xl shadow-lg hover:bg-red-700 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl"
+              >
+                  <ExclamationTriangleIcon className="w-8 h-8 animate-pulse flex-shrink-0" />
+                  <span className="text-xl text-center">هل لديك حالة طارئة؟ اضغط هنا للتدخل الفوري</span>
+              </button>
+          </div>
+        </div>
 
-        {/* Features Section */}
         <div className="bg-white py-16 sm:py-24">
             <div className="container mx-auto px-4">
                 <div className="max-w-4xl mx-auto text-center">
@@ -328,161 +828,12 @@ const MaintenancePage: React.FC<MaintenancePageProps> = ({
             </div>
         </div>
 
-        {/* Form Content */}
         <div className="container mx-auto px-4 pt-12 pb-16 relative z-10" id="maintenance-form">
             <div className="max-w-3xl mx-auto">
-              {isSubmissionSuccessful ? (
-                <SubmissionSuccessDisplay submittedRequest={submittedRequest} />
-              ) : (
-                <>
-                  {adSettings.isEnabled && adSettings.displayPages.includes('maintenance') && adSettings.imageUrl && (
-                    <div className="mb-8">
-                        <AdvertisementBanner imageUrl={adSettings.imageUrl} linkUrl={adSettings.linkUrl} />
-                    </div>
-                   )}
-        
-                  {!analysis && (
-                    <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-gray-200">
-                      <div className="flex items-center gap-3 mb-6">
-                        <SparklesIcon className="w-7 h-7 text-indigo-500" />
-                        <h2 className="text-2xl font-bold text-gray-800">اطلب خدمة صيانة الآن</h2>
-                      </div>
-                      
-                       <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-6">
-                          <div>
-                            <label htmlFor="category" className="block text-base font-medium text-gray-700 mb-2">
-                              1. اختر قسم الصيانة
-                            </label>
-                            <select
-                              id="category"
-                              name="category"
-                              value={selectedCategory}
-                              onChange={(e) => setSelectedCategory(e.target.value)}
-                              className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow bg-white"
-                              required
-                              disabled={isLoading}
-                            >
-                              <option value="" disabled>-- الرجاء اختيار قسم --</option>
-                              {maintenanceCategories.map(cat => (
-                                <option key={cat.id} value={cat.name}>{cat.name}</option>
-                              ))}
-                            </select>
-                          </div>
-    
-                          <div>
-                            <label htmlFor="userLocation" className="block text-base font-medium text-gray-700 mb-2">
-                              2. أدخل منطقتك أو حيك (لترشيح أقرب فني)
-                            </label>
-                            <input
-                              id="userLocation"
-                              type="text"
-                              value={userLocation}
-                              onChange={(e) => setUserLocation(e.target.value)}
-                              className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow bg-white"
-                              placeholder="مثال: جدة، حي السلامة"
-                              disabled={isLoading}
-                            />
-                          </div>
-        
-                          <div>
-                            <label htmlFor="description" className="block text-base font-medium text-gray-700 mb-2">
-                                3. صف مشكلة الصيانة بالتفصيل
-                            </label>
-                            <textarea
-                                id="description"
-                                rows={6}
-                                className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow"
-                                placeholder="مثال: يوجد تسريب مياه أسفل حوض المطبخ، والصنبور لا يغلق بإحكام."
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                disabled={isLoading}
-                            />
-                            <p className="text-sm text-gray-500 mt-2">كلما كان الوصف أكثر تفصيلاً، كان تحليل الذكاء الاصطناعي أكثر دقة.</p>
-                          </div>
-                          
-                          <div>
-                            <label className="block text-base font-medium text-gray-700 mb-2">
-                              4. إرفاق صور (اختياري)
-                            </label>
-                            <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                              <div className="space-y-1 text-center">
-                                <PhotoIcon className="mx-auto h-12 w-12 text-gray-400" />
-                                <div className="flex text-sm text-gray-600 justify-center">
-                                  <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500 px-1">
-                                    <span>اختر ملفات</span>
-                                    <input id="file-upload" name="file-upload" type="file" className="sr-only" multiple accept="image/*" onChange={handleFileChange} disabled={isLoading}/>
-                                  </label>
-                                  <p className="pr-1">أو اسحبها وأفلتها هنا</p>
-                                </div>
-                                <p className="text-xs text-gray-500">
-                                  ملفات بصيغة PNG, JPG, JPEG
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-        
-                          {files.length > 0 && (
-                            <div className="mt-4">
-                                <p className="font-medium text-gray-700">الصور المحددة:</p>
-                                <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                                    {files.map((file, index) => (
-                                        <div key={index} className="relative group">
-                                            <img src={URL.createObjectURL(file)} alt={`preview ${index}`} className="h-28 w-full object-cover rounded-md border border-gray-200" />
-                                            <button 
-                                                type="button"
-                                                onClick={() => removeFile(index)} 
-                                                aria-label="Remove image"
-                                                className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                disabled={isLoading}
-                                            >
-                                                <TrashIcon className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                          )}
-                          
-                          <button
-                              type="submit"
-                              disabled={isLoading || !description.trim() || !selectedCategory}
-                              className="mt-8 w-full flex items-center justify-center gap-3 bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 disabled:bg-indigo-400 disabled:cursor-not-allowed"
-                          >
-                              {isLoading ? (
-                              <>
-                                  <CogIcon className="animate-spin h-5 w-5" />
-                                  <span>جاري التحليل...</span>
-                              </>
-                              ) : (
-                              'حلّل الطلب بالذكاء الاصطناعي'
-                              )}
-                          </button>
-                      </form>
-                    </div>
-                  )}
-        
-                  {error && (
-                    <div className="mt-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg" role="alert">
-                      <p className="font-bold">خطأ</p>
-                      <p>{error}</p>
-                    </div>
-                  )}
-        
-                  {isLoading && (
-                    <div className="mt-8 text-center p-8 bg-white rounded-lg shadow-md border border-gray-200">
-                        <CogIcon className="animate-spin h-12 w-12 mx-auto text-indigo-500" />
-                        <p className="mt-4 text-lg font-semibold text-gray-700">يقوم الذكاء الاصطناعي بتحليل طلبك...</p>
-                        <p className="text-gray-500">قد يستغرق الأمر بضع لحظات إضافية مع الصور.</p>
-                    </div>
-                  )}
-        
-                  {analysis && <AnalysisDisplay analysis={analysis} suggestedTechnician={suggestedTechnician} inspectionFee={inspectionFee} onConfirmRequest={handleConfirmRequest} />}
-                </>
-              )}
+              {renderContent()}
             </div>
         </div>
         
-        {/* Request Tracking & Warranty Check Section */}
         <div className="py-16 sm:py-24 bg-white border-t">
           <div className="container mx-auto px-4">
             <div className="max-w-3xl mx-auto">
@@ -528,7 +879,6 @@ const MaintenancePage: React.FC<MaintenancePageProps> = ({
                             <div className="p-5 border border-gray-200 rounded-lg bg-gray-50">
                                 <h3 className="text-xl font-bold text-gray-800 mb-4">تفاصيل الطلب #{requestLookupResult.request.id.slice(-8)}</h3>
                                 
-                                {/* Status Timeline */}
                                 <div className="my-6">
                                     <div className="flex items-center">
                                         <StatusStep label="جديد" active={requestLookupResult.request.status === 'جديد'} done={['قيد التنفيذ', 'مكتمل'].includes(requestLookupResult.request.status)} />
@@ -575,7 +925,6 @@ const MaintenancePage: React.FC<MaintenancePageProps> = ({
           </div>
         </div>
 
-        {/* Reviews Section */}
         <div className="bg-gray-50 py-16 sm:py-24 border-t">
             <div className="container mx-auto px-4">
                 <div className="max-w-4xl mx-auto text-center">
@@ -606,6 +955,14 @@ const MaintenancePage: React.FC<MaintenancePageProps> = ({
                 />
             </Modal>
         )}
+
+        <Modal isOpen={isEmergencyModalOpen} onClose={() => setIsEmergencyModalOpen(false)} title="طلب صيانة طارئة">
+            <EmergencyRequestForm 
+                services={emergencyServices}
+                onSubmit={onEmergencyMaintenanceRequestSubmit}
+                onCancel={() => setIsEmergencyModalOpen(false)}
+            />
+        </Modal>
 
     </div>
   );

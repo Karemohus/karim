@@ -1,8 +1,7 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { Property, PropertyType, PropertyStatus } from '../types';
-import { PhotoIcon, TrashIcon } from './icons';
+import { PhotoIcon, TrashIcon, SparklesIcon, CogIcon } from './icons';
+import { generatePropertyDescription } from '../services/geminiService';
 
 interface PropertyFormProps {
     initialData?: Property | null;
@@ -15,7 +14,10 @@ const DEFAULT_PROPERTY: Omit<Property, 'id' | 'createdAt'> = {
     type: 'سكني',
     price: 0,
     location: '',
+    latitude: 0,
+    longitude: 0,
     imageUrls: [],
+    videoUrl: '',
     description: '',
     area: 0,
     bedrooms: 0,
@@ -26,6 +28,7 @@ const DEFAULT_PROPERTY: Omit<Property, 'id' | 'createdAt'> = {
 
 const PropertyForm: React.FC<PropertyFormProps> = ({ initialData, onSubmit, onCancel }) => {
     const [formData, setFormData] = useState<Omit<Property, 'id' | 'createdAt'>>(DEFAULT_PROPERTY);
+    const [isGenerating, setIsGenerating] = useState(false);
 
     useEffect(() => {
         if (initialData) {
@@ -69,12 +72,27 @@ const PropertyForm: React.FC<PropertyFormProps> = ({ initialData, onSubmit, onCa
         e.target.value = ''; // Allow re-uploading the same file
     };
 
-    const handleRemoveImage = (indexToRemove: number) => {
+    const handleRemoveImage = (e: React.MouseEvent, indexToRemove: number) => {
+        e.preventDefault();
+        e.stopPropagation();
         if (window.confirm('هل أنت متأكد من رغبتك في حذف هذه الصورة؟')) {
             setFormData(prev => ({
                 ...prev,
                 imageUrls: prev.imageUrls.filter((_, index) => index !== indexToRemove),
             }));
+        }
+    };
+
+     const handleGenerateDescription = async () => {
+        setIsGenerating(true);
+        try {
+            const description = await generatePropertyDescription(formData);
+            setFormData(prev => ({...prev, description: description}));
+        } catch (error) {
+            console.error(error);
+            alert("حدث خطأ أثناء إنشاء الوصف. الرجاء المحاولة مرة أخرى.");
+        } finally {
+            setIsGenerating(false);
         }
     };
     
@@ -87,6 +105,8 @@ const PropertyForm: React.FC<PropertyFormProps> = ({ initialData, onSubmit, onCa
             createdAt: initialData?.createdAt || new Date().toISOString(),
             price: Number(formData.price) || 0,
             area: Number(formData.area) || 0,
+            latitude: Number(formData.latitude) || 0,
+            longitude: Number(formData.longitude) || 0,
             bedrooms: formData.type === 'سكني' ? (Number(formData.bedrooms) || 0) : undefined,
             bathrooms: formData.type === 'سكني' ? (Number(formData.bathrooms) || 0) : undefined,
             commission: Number(formData.commission) || 0,
@@ -122,6 +142,22 @@ const PropertyForm: React.FC<PropertyFormProps> = ({ initialData, onSubmit, onCa
                  <div>
                     <label htmlFor="location" className={labelClass}>الموقع</label>
                     <input type="text" id="location" name="location" value={formData.location} onChange={handleChange} className={inputClass} required />
+                </div>
+            </div>
+
+            <div>
+                <label htmlFor="videoUrl" className={labelClass}>رابط الفيديو (يوتيوب)</label>
+                <input type="url" id="videoUrl" name="videoUrl" value={formData.videoUrl || ''} onChange={handleChange} className={inputClass} placeholder="https://www.youtube.com/watch?v=..." />
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div>
+                    <label htmlFor="latitude" className={labelClass}>خط العرض (Latitude)</label>
+                    <input type="number" step="any" id="latitude" name="latitude" value={formData.latitude} onChange={handleChange} className={inputClass} required />
+                </div>
+                 <div>
+                    <label htmlFor="longitude" className={labelClass}>خط الطول (Longitude)</label>
+                    <input type="number" step="any" id="longitude" name="longitude" value={formData.longitude} onChange={handleChange} className={inputClass} required />
                 </div>
             </div>
 
@@ -161,8 +197,19 @@ const PropertyForm: React.FC<PropertyFormProps> = ({ initialData, onSubmit, onCa
             )}
             
             <div>
-                <label htmlFor="description" className={labelClass}>الوصف</label>
-                <textarea id="description" name="description" value={formData.description} onChange={handleChange} rows={4} className={inputClass} required />
+                 <div className="flex justify-between items-center mb-1">
+                    <label htmlFor="description" className={labelClass}>الوصف</label>
+                    <button 
+                      type="button"
+                      onClick={handleGenerateDescription}
+                      disabled={isGenerating || !formData.title || !formData.location || !formData.area}
+                      className="flex items-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isGenerating ? <CogIcon className="w-5 h-5 animate-spin"/> : <SparklesIcon className="w-5 h-5"/>}
+                      <span>{isGenerating ? 'جاري الإنشاء...' : 'إنشاء وصف بالذكاء الاصطناعي'}</span>
+                    </button>
+                </div>
+                <textarea id="description" name="description" value={formData.description} onChange={handleChange} rows={6} className={inputClass} required />
             </div>
 
             <div>
@@ -191,11 +238,11 @@ const PropertyForm: React.FC<PropertyFormProps> = ({ initialData, onSubmit, onCa
                                   <img src={url} alt={`preview ${index}`} className="h-28 w-full object-cover rounded-md border border-gray-200" />
                                   <button 
                                       type="button"
-                                      onClick={() => handleRemoveImage(index)} 
+                                      onClick={(e) => handleRemoveImage(e, index)} 
                                       aria-label="Remove image"
-                                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                      className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 transform hover:scale-110"
                                   >
-                                      <TrashIcon className="w-4 h-4" />
+                                      <TrashIcon className="w-5 h-5" />
                                   </button>
                               </div>
                           ))}
