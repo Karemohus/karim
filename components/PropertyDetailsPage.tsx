@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Property, ViewingRequest, Review, Page, NeighborhoodInfo, ReviewSummary, RentalAgreement, MaintenanceLog } from '../types';
-import { MapPinIcon, ArrowsPointingOutIcon, BedIcon, ShowerIcon, DocumentTextIcon, ArrowLeftIcon, HomeModernIcon, BuildingOffice2Icon, StarIcon, TagIcon, HeartIcon, CogIcon, BuildingLibraryIcon, TruckIcon, LifebuoyIcon, SparklesIcon, PlayCircleIcon, BanknotesIcon, WrenchScrewdriverIcon } from './icons';
+import { MapPinIcon, ArrowsPointingOutIcon, BedIcon, ShowerIcon, DocumentTextIcon, ArrowLeftIcon, HomeModernIcon, BuildingOffice2Icon, StarIcon, TagIcon, HeartIcon, CogIcon, BuildingLibraryIcon, TruckIcon, LifebuoyIcon, SparklesIcon, PlayCircleIcon, BanknotesIcon, WrenchScrewdriverIcon, ShoppingBagIcon, ShieldCheckIcon, SunIcon, CheckCircleIcon } from './icons';
 import Modal from './Modal';
 import ViewingRequestForm from './ViewingRequestForm';
 import Lightbox from './Lightbox';
@@ -38,6 +38,17 @@ const NeighborhoodInfoCard: React.FC<{ icon: React.ReactNode; title: string; chi
         <div className="text-gray-600">{children}</div>
     </div>
 );
+
+const getAmenityIcon = (amenity: string) => {
+    const lowerAmenity = amenity.toLowerCase();
+    if (['مدرسة', 'مدارس', 'جامعة'].some(keyword => lowerAmenity.includes(keyword))) return <BuildingLibraryIcon className="w-5 h-5 text-green-500 flex-shrink-0" />;
+    if (['مستشفى', 'صيدلية', 'عيادة'].some(keyword => lowerAmenity.includes(keyword))) return <ShieldCheckIcon className="w-5 h-5 text-red-500 flex-shrink-0" />;
+    if (['مول', 'سوق', 'متجر'].some(keyword => lowerAmenity.includes(keyword))) return <ShoppingBagIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />;
+    if (['حديقة', 'منتزه'].some(keyword => lowerAmenity.includes(keyword))) return <SunIcon className="w-5 h-5 text-yellow-500 flex-shrink-0" />;
+    if (['طريق', 'جسر', 'مترو', 'قطار'].some(keyword => lowerAmenity.includes(keyword))) return <TruckIcon className="w-5 h-5 text-gray-500 flex-shrink-0" />;
+    return <CheckCircleIcon className="w-5 h-5 text-gray-400 flex-shrink-0" />; // Default icon
+};
+
 
 const getYouTubeEmbedUrl = (url: string | undefined): string | null => {
     if (!url) return null;
@@ -399,13 +410,23 @@ const PropertyDetailsPage: React.FC<PropertyDetailsPageProps> = ({ property, onB
                                 <p>{neighborhoodInfo.lifestyle}</p>
                             </NeighborhoodInfoCard>
                             <NeighborhoodInfoCard icon={<BuildingLibraryIcon className="w-7 h-7 text-green-500" />} title="الخدمات والمرافق">
-                                <ul className="space-y-2 list-inside list-disc">
-                                    {neighborhoodInfo.services.map((item, i) => <li key={i}>{item}</li>)}
+                                <ul className="space-y-3">
+                                    {neighborhoodInfo.services.map((item, i) => (
+                                        <li key={i} className="flex items-start gap-3">
+                                            {getAmenityIcon(item)}
+                                            <span>{item}</span>
+                                        </li>
+                                    ))}
                                 </ul>
                             </NeighborhoodInfoCard>
                             <NeighborhoodInfoCard icon={<TruckIcon className="w-7 h-7 text-blue-500" />} title="المواصلات والطرق">
-                                <ul className="space-y-2 list-inside list-disc">
-                                    {neighborhoodInfo.transportation.map((item, i) => <li key={i}>{item}</li>)}
+                                <ul className="space-y-3">
+                                    {neighborhoodInfo.transportation.map((item, i) => (
+                                        <li key={i} className="flex items-start gap-3">
+                                            {getAmenityIcon(item)}
+                                            <span>{item}</span>
+                                        </li>
+                                    ))}
                                 </ul>
                             </NeighborhoodInfoCard>
                         </div>
