@@ -50,7 +50,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 transition-shadow"
                         required
                         autoComplete="tel"
-                        placeholder="05xxxxxxxx أو karim"
+                        placeholder="05xxxxxxxx أو معرف المسؤول"
                     />
                 </div>
                 <div>
