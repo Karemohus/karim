@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { MaintenanceAnalysis, Technician, MaintenanceAdvice, PointsSettings } from '../types';
 import { CheckCircleIcon, UserGroupIcon, WrenchIcon, BoltIcon, CogIcon, DocumentTextIcon, InformationCircleIcon, SparklesIcon, StarIcon, PhotoIcon, BugIcon, TruckIcon, BanknotesIcon, WrenchScrewdriverIcon, ExclamationTriangleIcon, GlobeAltIcon, CheckIcon, LightBulbIcon } from './icons';
