@@ -1,21 +1,15 @@
 
 
 
+
+
 import { GoogleGenAI, Type, Part, Chat, Modality } from "@google/genai";
 import { MaintenanceAnalysis, Technician, Property, AIPropertySearchResult, CommonIssue, ChatMessage, NeighborhoodInfo, ChatbotSettings, Review, ReviewSummary, PropertyComparison, MaintenanceRequest, EmergencyMaintenanceRequest, MaintenanceAdvice } from '../types';
 
-// Safely access the API key from the environment. This prevents a ReferenceError if 'process' is not defined in the browser.
-// The hosting environment is expected to populate process.env.API_KEY.
-const API_KEY = (typeof process !== 'undefined' && process.env && process.env.API_KEY) ? process.env.API_KEY : undefined;
+// As per guidelines, assume process.env.API_KEY is made available by the execution environment.
+// Do not add defensive checks for `process`. The hosting environment is expected to populate this.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-if (!API_KEY) {
-  // We log a warning instead of throwing an error that stops the whole app.
-  // The Gemini calls will fail gracefully later if the key is missing.
-  console.warn("API_KEY environment variable not set. AI features will not work.");
-}
-
-// Initialize the client. If API_KEY is missing, calls will fail later.
-const ai = new GoogleGenAI({ apiKey: API_KEY || '' });
 
 export const analyzeMaintenanceRequest = async (
   description: string, 
@@ -25,10 +19,6 @@ export const analyzeMaintenanceRequest = async (
   userLocation: string,
   commonIssuesForCategory: CommonIssue[]
 ): Promise<Omit<MaintenanceAnalysis, 'category'>> => {
-
-  if (!API_KEY) {
-    throw new Error("API Key is not configured. AI analysis is unavailable.");
-  }
 
   const availableTechnicians = technicians.filter(t => t.isAvailable);
   const technicianList = availableTechnicians.length > 0
@@ -124,10 +114,6 @@ ${commonIssuesForCategory.map(issue => `- العطل: "${issue.name}", نطاق 
 };
 
 export const getMaintenanceAdvice = async (description: string, category: string): Promise<MaintenanceAdvice> => {
-    if (!API_KEY) {
-        throw new Error("API Key is not configured. AI advice is unavailable.");
-    }
-
     const adviceSchema = {
         type: Type.OBJECT,
         properties: {
@@ -181,10 +167,6 @@ export const searchPropertiesWithAI = async (
   query: string,
   properties: Property[]
 ): Promise<AIPropertySearchResult[]> => {
-
-  if (!API_KEY) {
-    throw new Error("API Key is not configured. AI search is unavailable.");
-  }
 
   const propertyListForAI = properties.map(p => (
     `ID: ${p.id}\n` +
@@ -259,10 +241,6 @@ ${propertyListForAI}
 };
 
 export const getNeighborhoodInfo = async (property: Property): Promise<NeighborhoodInfo> => {
-    if (!API_KEY) {
-        throw new Error("API Key is not configured. AI analysis is unavailable.");
-    }
-
     const neighborhoodSchema = {
         type: Type.OBJECT,
         properties: {
@@ -329,10 +307,6 @@ export const getNeighborhoodInfo = async (property: Property): Promise<Neighborh
 };
 
 export const generatePropertyDescription = async (propertyData: Partial<Property>): Promise<string> => {
-    if (!API_KEY) {
-        throw new Error("API Key is not configured. AI features are unavailable.");
-    }
-
     const details = [
         `العنوان: ${propertyData.title}`,
         `النوع: ${propertyData.type}`,
@@ -368,10 +342,6 @@ ${details.join('\n')}
 };
 
 export const summarizeReviewsWithAI = async (reviews: Review[]): Promise<ReviewSummary> => {
-    if (!API_KEY) {
-        throw new Error("API Key is not configured. AI features are unavailable.");
-    }
-
     const reviewComments = reviews.map(r => `- (تقييم ${r.rating}/5): ${r.comment}`).join('\n');
 
     const summarySchema = {
@@ -417,10 +387,6 @@ export const summarizeReviewsWithAI = async (reviews: Review[]): Promise<ReviewS
 };
 
 export const comparePropertiesWithAI = async (properties: Property[], query: string): Promise<PropertyComparison> => {
-    if (!API_KEY) {
-        throw new Error("API Key is not configured. AI features are unavailable.");
-    }
-
     const propertyListForAI = properties.map(p => (
         `---\n` +
         `العنوان: ${p.title}\n` +
@@ -501,10 +467,6 @@ ${propertyListForAI}
 };
 
 export const generateInteriorDesign = async (imagePart: Part, userPrompt: string): Promise<string> => {
-  if (!API_KEY) {
-    throw new Error("API Key is not configured. AI features are unavailable.");
-  }
-
   const textPart = {
     text: `بناءً على الصورة المقدمة، أعد تصميم الديكور الداخلي وفقًا للطلب التالي: "${userPrompt}". 
 حافظ على التخطيط الأصلي للغرفة (النوافذ والأبواب) ولكن غيّر الأثاث والديكور والألوان لتتناسب مع النمط الجديد.`,
@@ -545,10 +507,6 @@ export const createGeneralChat = (
     maintenanceRequests: MaintenanceRequest[],
     emergencyMaintenanceRequests: EmergencyMaintenanceRequest[]
 ): Chat => {
-    if (!API_KEY) {
-        throw new Error("API Key is not configured. AI features are unavailable.");
-    }
-
     const availableProperties = properties.filter(p => p.status === 'متاح');
     const propertyListForAI = availableProperties.length > 0 ? availableProperties.map(p => (
         `العنوان: ${p.title}\n` +
@@ -647,10 +605,6 @@ export const suggestSimilarProperties = async (
   currentProperty: Property,
   allProperties: Property[]
 ): Promise<AIPropertySearchResult[]> => {
-  if (!API_KEY) {
-    throw new Error("API Key is not configured. AI suggestions are unavailable.");
-  }
-
   // Filter out the current property and get only available ones
   const otherProperties = allProperties.filter(p => p.id !== currentProperty.id && p.status === 'متاح');
 
