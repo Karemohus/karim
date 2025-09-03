@@ -1,6 +1,7 @@
 
 
-import { GoogleGenAI, Type, Part, Chat } from "@google/genai";
+
+import { GoogleGenAI, Type, Part, Chat, Modality } from "@google/genai";
 import { MaintenanceAnalysis, Technician, Property, AIPropertySearchResult, CommonIssue, ChatMessage, NeighborhoodInfo, ChatbotSettings, Review, ReviewSummary, PropertyComparison, MaintenanceRequest, EmergencyMaintenanceRequest, MaintenanceAdvice } from '../types';
 
 // Safely access the API key from the environment. This prevents a ReferenceError if 'process' is not defined in the browser.
@@ -257,7 +258,7 @@ ${propertyListForAI}
   }
 };
 
-export const getNeighborhoodInfo = async (location: string): Promise<NeighborhoodInfo> => {
+export const getNeighborhoodInfo = async (property: Property): Promise<NeighborhoodInfo> => {
     if (!API_KEY) {
         throw new Error("API Key is not configured. AI analysis is unavailable.");
     }
@@ -283,13 +284,28 @@ export const getNeighborhoodInfo = async (location: string): Promise<Neighborhoo
                 items: { type: Type.STRING },
                 description: 'قائمة بأبرز خيارات وسهولة الوصول للمواصلات (مثال: قريب من طريق الملك فهد، محطة مترو قريبة، سهولة الوصول لسيارات الأجرة).',
             },
+            property_recommendation: {
+                type: Type.STRING,
+                description: 'اذكر سببًا محددًا وموجزًا يجعل هذا العقار المعروض مميزًا في هذا الحي، رابطًا بين مواصفات العقار (مثل نوعه أو حجمه) ومميزات الحي (مثل قربه من خدمات معينة).',
+            },
         },
-        required: ['summary', 'lifestyle', 'services', 'transportation'],
+        required: ['summary', 'lifestyle', 'services', 'transportation', 'property_recommendation'],
     };
     
-    const systemInstruction = `أنت خبير محلي في أحياء مدن المملكة العربية السعودية. مهمتك هي تقديم دليل موجز وجذاب عن حي معين لمساعدة المستأجرين المحتملين. يجب أن يكون ردك بتنسيق JSON حصراً بناءً على المخطط المحدد.`;
+    const systemInstruction = `أنت خبير محلي في أحياء مدن المملكة العربية السعودية. مهمتك هي تقديم دليل موجز وجذاب عن حي معين وتقديم توصية مخصصة للعقار المعروض داخل هذا الحي. يجب أن يكون ردك بتنسيق JSON حصراً بناءً على المخطط المحدد.`;
     
-    const promptText = `قدم دليلاً عن الحي الموجود في الموقع التالي: "${location}". ركز على أسلوب الحياة، الخدمات الهامة (مدارس، مستشفيات، مراكز تسوق)، وسهولة الوصول والمواصلات. اجعل الوصف إيجابياً ومفيداً.`;
+    const promptText = `أنت خبير عقاري محلي. بناءً على بيانات العقار والموقع أدناه، قم بتحليل الحي وقدم توصية مخصصة.
+
+**بيانات العقار المعروض:**
+- العنوان: ${property.title}
+- النوع: ${property.type}
+- الوصف: ${property.description}
+- الموقع (الحي): "${property.location}"
+
+**المهمة:**
+1.  قدم دليلاً عن الحي الموجود في الموقع أعلاه. ركز على أسلوب الحياة، الخدمات الهامة (مدارس، مستشفيات، مراكز تسوق)، وسهولة الوصول والمواصلات.
+2.  بناءً على بيانات العقار ومميزات الحي، اكتب "توصية للعقار" (property_recommendation) قصيرة ومقنعة تشرح لماذا هذا العقار (بنوعه ومواصفاته) يعتبر خيارًا ممتازًا في هذا الموقع تحديدًا.
+3.  اجعل الوصف إيجابياً ومفيداً للمستأجر المحتمل.`;
 
     try {
         const response = await ai.models.generateContent({
@@ -488,52 +504,37 @@ export const generateInteriorDesign = async (imagePart: Part, userPrompt: string
   if (!API_KEY) {
     throw new Error("API Key is not configured. AI features are unavailable.");
   }
-  
-  // Step 1: Describe the image using Gemini Flash
-  const descriptionSystemInstruction = `أنت خبير في وصف المشاهد الداخلية لنموذج توليد الصور. مهمتك هي وصف الغرفة في الصورة المقدمة بتفاصيل دقيقة. ركز على التخطيط، ومواضع النوافذ والأبواب، وشكل الغرفة، وأي أثاث موجود. يجب أن يكون الوصف واضحاً وموجزاً ليكون أساساً جيداً لإعادة التصميم.`;
-  const descriptionContents = { parts: [imagePart, { text: "صف هذه الغرفة بالتفصيل لنموذج توليد الصور." }] };
-  
-  let baseImageDescription = '';
+
+  const textPart = {
+    text: `بناءً على الصورة المقدمة، أعد تصميم الديكور الداخلي وفقًا للطلب التالي: "${userPrompt}". 
+حافظ على التخطيط الأصلي للغرفة (النوافذ والأبواب) ولكن غيّر الأثاث والديكور والألوان لتتناسب مع النمط الجديد.`,
+  };
+
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: descriptionContents,
+      model: 'gemini-2.5-flash-image-preview',
+      contents: {
+        parts: [imagePart, textPart],
+      },
       config: {
-        systemInstruction: descriptionSystemInstruction,
+          responseModalities: [Modality.IMAGE, Modality.TEXT],
       },
     });
-    baseImageDescription = response.text.trim();
-  } catch (error) {
-    console.error("Gemini image description step failed:", error);
-    throw new Error("Failed to describe image with Gemini API in the first step.");
-  }
 
-  if (!baseImageDescription) {
-      throw new Error("Could not generate a description for the image.");
-  }
-
-  // Step 2: Generate the new image using Imagen
-  const finalPrompt = `صورة فوتوغرافية واقعية لتصميم داخلي لغرفة بالتفاصيل التالية: "${baseImageDescription}". يجب أن يكون التصميم الجديد للغرفة وفقاً للطلب التالي: "${userPrompt}". حافظ على التخطيط الأصلي للغرفة (النوافذ والأبواب) ولكن غير الأثاث والديكور والألوان ليتناسب مع الطلب الجديد.`;
-
-  try {
-    const imageResponse = await ai.models.generateImages({
-        model: 'imagen-3.0-generate-002',
-        prompt: finalPrompt,
-        config: {
-          numberOfImages: 1,
-          outputMimeType: 'image/jpeg',
-          aspectRatio: '16:9',
-        },
-    });
-
-    if (imageResponse.generatedImages && imageResponse.generatedImages.length > 0) {
-        return imageResponse.generatedImages[0].image.imageBytes;
-    } else {
-        throw new Error("Image generation returned no images.");
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        return part.inlineData.data;
+      }
     }
+
+    throw new Error("لم يقم الذكاء الاصطناعي بإرجاع صورة. يرجى تجربة طلب مختلف.");
+  
   } catch (error) {
-    console.error("Gemini image generation step failed:", error);
-    throw new Error("Failed to generate interior design from Gemini API in the second step.");
+    console.error("Gemini interior design generation failed:", error);
+    if (error instanceof Error && error.message.includes("SAFETY")) {
+        throw new Error("تم حظر الطلب بسبب سياسات السلامة. يرجى تعديل طلبك والمحاولة مرة أخرى.");
+    }
+    throw new Error("فشل في إنشاء التصميم الداخلي من Gemini API.");
   }
 };
 

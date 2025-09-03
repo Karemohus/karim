@@ -83,6 +83,7 @@ export interface NeighborhoodInfo {
   lifestyle: string;
   services: string[];
   transportation: string[];
+  property_recommendation: string;
 }
 
 export const MaintenanceFeatureIconNames = ['ShieldCheckIcon', 'LockClosedIcon', 'ChatBubbleLeftEllipsisIcon', 'TagIcon', 'ReceiptPercentIcon', 'ArrowUturnLeftIcon', 'WrenchScrewdriverIcon', 'StarIcon', 'CheckCircleIcon'] as const;
@@ -251,7 +252,8 @@ export interface MaintenanceConfirmationSettings {
   subtitle: string;
   imageUrl: string; // data URL or external URL
   primaryButtonText: string;
-  primaryButtonLink: string; // Can be a page name like 'rentals' or a full URL
+  // FIX: Added missing property to align with usage
+  primaryButtonLink: string;
   secondaryButtonText: string;
   secondaryButtonLink: string;
   showPropertySections: boolean;
@@ -302,6 +304,7 @@ export interface PointsSettings {
     pointsPerRental: number;
     pointsPerReview: number;
     pointsPerMaintenanceRequest: number;
+  primaryButtonLink: string; // Can be a page name like 'rentals' or a full URL
     pointValueInSAR: number;
     pointsPerReferral: number;
 }
