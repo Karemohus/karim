@@ -21,7 +21,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onSelectProperty 
         viewingRequests: allViewingRequests, 
         rentalAgreements: allRentalAgreements,
         properties: allProperties,
-        pointsSettings
+        pointsSettings,
+        technicians,
     } = db;
 
     const [activeTab, setActiveTab] = useState<ProfileTab>('profile');
@@ -157,13 +158,26 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onSelectProperty 
                         <h3 className="text-xl font-bold mb-4">طلبات الصيانة الخاصة بي</h3>
                         {combinedMaintenanceHistory.length > 0 ? (
                             <div className="space-y-4">
-                                {combinedMaintenanceHistory.map(req => (
+                                {combinedMaintenanceHistory.map(req => {
+                                    const assignedTechnician = req.type === 'ai' && req.assignedTechnicianId
+                                        ? technicians.find(t => t.id === req.assignedTechnicianId)
+                                        : null;
+                                    
+                                    return (
                                     <div key={req.id} className="p-4 border rounded-lg bg-gray-50">
-                                        <div className="flex justify-between items-start">
+                                        <div className="flex justify-between items-start flex-wrap gap-2">
                                             <div>
                                                 <p className="font-bold">{req.type === 'ai' ? req.analysis.summary : req.title}</p>
                                                 <p className="text-sm text-gray-500"><strong>التاريخ:</strong> {new Date(req.requestDate).toLocaleDateString('ar-EG-u-nu-latn')}</p>
                                                 <p className="text-sm text-gray-500"><strong>الحالة:</strong> <span className="font-semibold">{req.status}</span></p>
+                                                {req.type === 'ai' && req.scheduledDate && (
+                                                    <div className="mt-2 text-sm p-2 bg-blue-100 border border-blue-200 rounded-md">
+                                                        <p className="font-bold text-blue-800">
+                                                            الموعد: {new Date(req.scheduledDate).toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                                        </p>
+                                                        {assignedTechnician && <p className="text-blue-700">الفني المسؤول: {assignedTechnician.name}</p>}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <span className={`px-3 py-1 text-xs font-bold rounded-full flex items-center gap-1.5 ${req.type === 'ai' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
@@ -178,7 +192,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onSelectProperty 
                                             </div>
                                         </div>
                                     </div>
-                                ))}
+                                    )
+                                })}
                             </div>
                         ) : <p>لا توجد طلبات صيانة.</p>}
                     </div>

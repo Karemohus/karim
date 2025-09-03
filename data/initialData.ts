@@ -289,7 +289,6 @@ export const INITIAL_POINTS_SETTINGS: PointsSettings = {
     pointsPerRental: 100,
     pointsPerReview: 25,
     pointsPerMaintenanceRequest: 15,
-    primaryButtonLink: 'rentals',
     pointValueInSAR: 0.1, // 1 point = 0.1 SAR, so 10 points = 1 SAR
     pointsPerReferral: 50,
 };

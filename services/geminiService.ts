@@ -1,16 +1,20 @@
 
 
-
-
-
-
-import { GoogleGenAI, Type, Part, Chat, Modality } from "@google/genai";
+import { GoogleGenAI, Type, Part, Chat } from "@google/genai";
 import { MaintenanceAnalysis, Technician, Property, AIPropertySearchResult, CommonIssue, ChatMessage, NeighborhoodInfo, ChatbotSettings, Review, ReviewSummary, PropertyComparison, MaintenanceRequest, EmergencyMaintenanceRequest, MaintenanceAdvice } from '../types';
 
-// As per guidelines, assume process.env.API_KEY is made available by the execution environment.
-// Do not add defensive checks for `process`. The hosting environment is expected to populate this.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Safely access the API key from the environment. This prevents a ReferenceError if 'process' is not defined in the browser.
+// The hosting environment is expected to populate process.env.API_KEY.
+const API_KEY = (typeof process !== 'undefined' && process.env && process.env.API_KEY) ? process.env.API_KEY : undefined;
 
+if (!API_KEY) {
+  // We log a warning instead of throwing an error that stops the whole app.
+  // The Gemini calls will fail gracefully later if the key is missing.
+  console.warn("API_KEY environment variable not set. AI features will not work.");
+}
+
+// Initialize the client. If API_KEY is missing, calls will fail later.
+const ai = new GoogleGenAI({ apiKey: API_KEY || '' });
 
 export const analyzeMaintenanceRequest = async (
   description: string, 
@@ -20,6 +24,10 @@ export const analyzeMaintenanceRequest = async (
   userLocation: string,
   commonIssuesForCategory: CommonIssue[]
 ): Promise<Omit<MaintenanceAnalysis, 'category'>> => {
+
+  if (!API_KEY) {
+    throw new Error("API Key is not configured. AI analysis is unavailable.");
+  }
 
   const availableTechnicians = technicians.filter(t => t.isAvailable);
   const technicianList = availableTechnicians.length > 0
@@ -115,6 +123,10 @@ ${commonIssuesForCategory.map(issue => `- العطل: "${issue.name}", نطاق 
 };
 
 export const getMaintenanceAdvice = async (description: string, category: string): Promise<MaintenanceAdvice> => {
+    if (!API_KEY) {
+        throw new Error("API Key is not configured. AI advice is unavailable.");
+    }
+
     const adviceSchema = {
         type: Type.OBJECT,
         properties: {
@@ -169,6 +181,10 @@ export const searchPropertiesWithAI = async (
   properties: Property[]
 ): Promise<AIPropertySearchResult[]> => {
 
+  if (!API_KEY) {
+    throw new Error("API Key is not configured. AI search is unavailable.");
+  }
+
   const propertyListForAI = properties.map(p => (
     `ID: ${p.id}\n` +
     `العنوان: ${p.title}\n` +
@@ -192,7 +208,7 @@ export const searchPropertiesWithAI = async (
             },
             reason: {
                 type: Type.STRING,
-                description: 'سبب مفصل ومقنع باللغة العربية لاقتراح هذا العقار، يربط بوضوح بين متطلبات المستخدم (بما في ذلك نمط الحياة، والمواصلات، والمرافق) ومميزات العقار المذكورة في بياناته.',
+                description: 'سبب واضح ومختصر باللغة العربية لاقتراح هذا العقار بناءً على طلب المستخدم.',
             },
         },
         required: ['propertyId', 'reason'],
@@ -202,18 +218,18 @@ export const searchPropertiesWithAI = async (
   const textPart = {
     text: `طلب المستخدم للبحث عن عقار هو: "${query}".
 
-قائمة العقارات المتاحة للتحليل:
+قائمة العقارات المتاحة:
 ${propertyListForAI}
 
-مهمتك كخبير عقاري:
-1.  **تحليل عميق لطلب المستخدم:** لا تكتفِ بالكلمات الرئيسية. افهم النية وراء الطلب. هل يبحث عن الهدوء؟ هل هو مناسب لعائلة لديها أطفال؟ هل يهمه القرب من أماكن العمل أو الترفيه؟
-2.  **المطابقة الذكية:** قارن طلب المستخدم مع كل تفاصيل العقارات المتاحة (العنوان، الموقع، الوصف، النوع، السعر، عدد الغرف، إلخ). ابحث عن روابط بين طلب المستخدم ووصف العقار وموقعه. على سبيل المثال، إذا طلب المستخدم "حي هادئ"، ابحث عن عقارات في أحياء معروفة بالهدوء أو التي يصفها الوصف بذلك.
-3.  **الترتيب حسب الأهمية:** أعد قائمة بالعقارات الأكثر مطابقة لطلب المستخدم. يجب أن تكون النتائج مرتبة من الأكثر صلة إلى الأقل صلة.
-4.  **تقديم سبب مفصل ومقنع:** لكل عقار مقترح، اذكر سببًا واضحًا ومفصلاً لاقتراحه. اشرح كيف يلبي هذا العقار المتطلبات الصريحة والضمنية في طلب المستخدم. مثال: "هذا العقار مثالي لك لأنه يقع في حي العليا الهادئ الذي ذكرته، ويحتوي على 3 غرف نوم مناسبة لعائلتك، كما أن الوصف يذكر قربه من حديقة عامة وهو ما يتناسب مع طلبك لمكان مناسب للأطفال".
+مهمتك:
+1.  حلل طلب المستخدم بعناية لفهم متطلباته (مثل النوع، الموقع، عدد الغرف، السعر، المميزات الخاصة).
+2.  قارن الطلب مع قائمة العقارات المتاحة.
+3.  أعد قائمة بالعقارات الأكثر مطابقة لطلب المستخدم. رتب النتائج من الأكثر صلة إلى الأقل.
+4.  لكل عقار مقترح، اذكر سببًا واضحًا وموجزًا لترشيحه يربط بين مواصفات العقار وطلب المستخدم.
 `
   };
   
-  const systemInstruction = `أنت مستشار عقاري خبير ومتطور يعمل بالذكاء الاصطناعي. مهمتك هي فهم احتياجات المستخدمين المعقدة المتعلقة بنمط الحياة، والمواصلات، والمرافق، ومطابقتها بذكاء مع العقارات المتاحة. يجب أن يكون ردك دائمًا بتنسيق JSON حصراً بناءً على المخطط المحدد. لا تخترع معلومات غير موجودة في بيانات العقار. رتب النتائج دائمًا من الأكثر صلة إلى الأقل. إذا لم تجد أي عقار مطابق، أعد مصفوفة فارغة.`;
+  const systemInstruction = `أنت مساعد خبير في البحث عن العقارات. مهمتك هي تحليل طلب المستخدم وقائمة العقارات المتاحة، ثم إرجاع قائمة بمعرفات العقارات (propertyId) التي تطابق طلب البحث بشكل أفضل، مع ذكر سبب الترشيح لكل عقار. يجب أن يكون ردك بتنسيق JSON حصراً بناءً على المخطط المحدد. إذا لم تجد أي عقار مطابق، أعد مصفوفة فارغة.`;
 
   const contents = { parts: [textPart] };
 
@@ -241,7 +257,11 @@ ${propertyListForAI}
   }
 };
 
-export const getNeighborhoodInfo = async (property: Property): Promise<NeighborhoodInfo> => {
+export const getNeighborhoodInfo = async (location: string): Promise<NeighborhoodInfo> => {
+    if (!API_KEY) {
+        throw new Error("API Key is not configured. AI analysis is unavailable.");
+    }
+
     const neighborhoodSchema = {
         type: Type.OBJECT,
         properties: {
@@ -263,28 +283,13 @@ export const getNeighborhoodInfo = async (property: Property): Promise<Neighborh
                 items: { type: Type.STRING },
                 description: 'قائمة بأبرز خيارات وسهولة الوصول للمواصلات (مثال: قريب من طريق الملك فهد، محطة مترو قريبة، سهولة الوصول لسيارات الأجرة).',
             },
-            property_recommendation: {
-                type: Type.STRING,
-                description: 'اذكر سببًا محددًا وموجزًا يجعل هذا العقار المعروض مميزًا في هذا الحي، رابطًا بين مواصفات العقار (مثل نوعه أو حجمه) ومميزات الحي (مثل قربه من خدمات معينة).',
-            },
         },
-        required: ['summary', 'lifestyle', 'services', 'transportation', 'property_recommendation'],
+        required: ['summary', 'lifestyle', 'services', 'transportation'],
     };
     
-    const systemInstruction = `أنت خبير محلي في أحياء مدن المملكة العربية السعودية. مهمتك هي تقديم دليل موجز وجذاب عن حي معين وتقديم توصية مخصصة للعقار المعروض داخل هذا الحي. يجب أن يكون ردك بتنسيق JSON حصراً بناءً على المخطط المحدد.`;
+    const systemInstruction = `أنت خبير محلي في أحياء مدن المملكة العربية السعودية. مهمتك هي تقديم دليل موجز وجذاب عن حي معين لمساعدة المستأجرين المحتملين. يجب أن يكون ردك بتنسيق JSON حصراً بناءً على المخطط المحدد.`;
     
-    const promptText = `أنت خبير عقاري محلي. بناءً على بيانات العقار والموقع أدناه، قم بتحليل الحي وقدم توصية مخصصة.
-
-**بيانات العقار المعروض:**
-- العنوان: ${property.title}
-- النوع: ${property.type}
-- الوصف: ${property.description}
-- الموقع (الحي): "${property.location}"
-
-**المهمة:**
-1.  قدم دليلاً عن الحي الموجود في الموقع أعلاه. ركز على أسلوب الحياة، الخدمات الهامة (مدارس، مستشفيات، مراكز تسوق)، وسهولة الوصول والمواصلات.
-2.  بناءً على بيانات العقار ومميزات الحي، اكتب "توصية للعقار" (property_recommendation) قصيرة ومقنعة تشرح لماذا هذا العقار (بنوعه ومواصفاته) يعتبر خيارًا ممتازًا في هذا الموقع تحديدًا.
-3.  اجعل الوصف إيجابياً ومفيداً للمستأجر المحتمل.`;
+    const promptText = `قدم دليلاً عن الحي الموجود في الموقع التالي: "${location}". ركز على أسلوب الحياة، الخدمات الهامة (مدارس، مستشفيات، مراكز تسوق)، وسهولة الوصول والمواصلات. اجعل الوصف إيجابياً ومفيداً.`;
 
     try {
         const response = await ai.models.generateContent({
@@ -308,6 +313,10 @@ export const getNeighborhoodInfo = async (property: Property): Promise<Neighborh
 };
 
 export const generatePropertyDescription = async (propertyData: Partial<Property>): Promise<string> => {
+    if (!API_KEY) {
+        throw new Error("API Key is not configured. AI features are unavailable.");
+    }
+
     const details = [
         `العنوان: ${propertyData.title}`,
         `النوع: ${propertyData.type}`,
@@ -343,6 +352,10 @@ ${details.join('\n')}
 };
 
 export const summarizeReviewsWithAI = async (reviews: Review[]): Promise<ReviewSummary> => {
+    if (!API_KEY) {
+        throw new Error("API Key is not configured. AI features are unavailable.");
+    }
+
     const reviewComments = reviews.map(r => `- (تقييم ${r.rating}/5): ${r.comment}`).join('\n');
 
     const summarySchema = {
@@ -388,6 +401,10 @@ export const summarizeReviewsWithAI = async (reviews: Review[]): Promise<ReviewS
 };
 
 export const comparePropertiesWithAI = async (properties: Property[], query: string): Promise<PropertyComparison> => {
+    if (!API_KEY) {
+        throw new Error("API Key is not configured. AI features are unavailable.");
+    }
+
     const propertyListForAI = properties.map(p => (
         `---\n` +
         `العنوان: ${p.title}\n` +
@@ -468,36 +485,55 @@ ${propertyListForAI}
 };
 
 export const generateInteriorDesign = async (imagePart: Part, userPrompt: string): Promise<string> => {
-  const textPart = {
-    text: `بناءً على الصورة المقدمة، أعد تصميم الديكور الداخلي وفقًا للطلب التالي: "${userPrompt}". 
-حافظ على التخطيط الأصلي للغرفة (النوافذ والأبواب) ولكن غيّر الأثاث والديكور والألوان لتتناسب مع النمط الجديد.`,
-  };
-
+  if (!API_KEY) {
+    throw new Error("API Key is not configured. AI features are unavailable.");
+  }
+  
+  // Step 1: Describe the image using Gemini Flash
+  const descriptionSystemInstruction = `أنت خبير في وصف المشاهد الداخلية لنموذج توليد الصور. مهمتك هي وصف الغرفة في الصورة المقدمة بتفاصيل دقيقة. ركز على التخطيط، ومواضع النوافذ والأبواب، وشكل الغرفة، وأي أثاث موجود. يجب أن يكون الوصف واضحاً وموجزاً ليكون أساساً جيداً لإعادة التصميم.`;
+  const descriptionContents = { parts: [imagePart, { text: "صف هذه الغرفة بالتفصيل لنموذج توليد الصور." }] };
+  
+  let baseImageDescription = '';
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image-preview',
-      contents: {
-        parts: [imagePart, textPart],
-      },
+      model: "gemini-2.5-flash",
+      contents: descriptionContents,
       config: {
-          responseModalities: [Modality.IMAGE, Modality.TEXT],
+        systemInstruction: descriptionSystemInstruction,
       },
     });
-
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) {
-        return part.inlineData.data;
-      }
-    }
-
-    throw new Error("لم يقم الذكاء الاصطناعي بإرجاع صورة. يرجى تجربة طلب مختلف.");
-  
+    baseImageDescription = response.text.trim();
   } catch (error) {
-    console.error("Gemini interior design generation failed:", error);
-    if (error instanceof Error && error.message.includes("SAFETY")) {
-        throw new Error("تم حظر الطلب بسبب سياسات السلامة. يرجى تعديل طلبك والمحاولة مرة أخرى.");
+    console.error("Gemini image description step failed:", error);
+    throw new Error("Failed to describe image with Gemini API in the first step.");
+  }
+
+  if (!baseImageDescription) {
+      throw new Error("Could not generate a description for the image.");
+  }
+
+  // Step 2: Generate the new image using Imagen
+  const finalPrompt = `صورة فوتوغرافية واقعية لتصميم داخلي لغرفة بالتفاصيل التالية: "${baseImageDescription}". يجب أن يكون التصميم الجديد للغرفة وفقاً للطلب التالي: "${userPrompt}". حافظ على التخطيط الأصلي للغرفة (النوافذ والأبواب) ولكن غير الأثاث والديكور والألوان ليتناسب مع الطلب الجديد.`;
+
+  try {
+    const imageResponse = await ai.models.generateImages({
+        model: 'imagen-3.0-generate-002',
+        prompt: finalPrompt,
+        config: {
+          numberOfImages: 1,
+          outputMimeType: 'image/jpeg',
+          aspectRatio: '16:9',
+        },
+    });
+
+    if (imageResponse.generatedImages && imageResponse.generatedImages.length > 0) {
+        return imageResponse.generatedImages[0].image.imageBytes;
+    } else {
+        throw new Error("Image generation returned no images.");
     }
-    throw new Error("فشل في إنشاء التصميم الداخلي من Gemini API.");
+  } catch (error) {
+    console.error("Gemini image generation step failed:", error);
+    throw new Error("Failed to generate interior design from Gemini API in the second step.");
   }
 };
 
@@ -508,6 +544,10 @@ export const createGeneralChat = (
     maintenanceRequests: MaintenanceRequest[],
     emergencyMaintenanceRequests: EmergencyMaintenanceRequest[]
 ): Chat => {
+    if (!API_KEY) {
+        throw new Error("API Key is not configured. AI features are unavailable.");
+    }
+
     const availableProperties = properties.filter(p => p.status === 'متاح');
     const propertyListForAI = availableProperties.length > 0 ? availableProperties.map(p => (
         `العنوان: ${p.title}\n` +
@@ -606,6 +646,10 @@ export const suggestSimilarProperties = async (
   currentProperty: Property,
   allProperties: Property[]
 ): Promise<AIPropertySearchResult[]> => {
+  if (!API_KEY) {
+    throw new Error("API Key is not configured. AI suggestions are unavailable.");
+  }
+
   // Filter out the current property and get only available ones
   const otherProperties = allProperties.filter(p => p.id !== currentProperty.id && p.status === 'متاح');
 

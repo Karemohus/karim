@@ -45,8 +45,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ siteSettings, chatbotSettings, proper
             const result = await chatRef.current.sendMessageStream({ message: "أهلاً" });
             let text = '';
             for await (const chunk of result) {
-                // The .text property gives the full aggregated text so far.
-                text = chunk.text;
+                text += chunk.text;
             }
             // Only add the message if it's not empty, to avoid blank bubbles.
             if (text.trim()) {
@@ -73,20 +72,21 @@ const Chatbot: React.FC<ChatbotProps> = ({ siteSettings, chatbotSettings, proper
         try {
             const stream = await chatRef.current.sendMessageStream({ message: trimmedInput });
             
+            let modelResponse = '';
             let messageStarted = false;
 
             for await (const chunk of stream) {
-                const chunkText = chunk.text;
+                modelResponse += chunk.text;
                 if (!messageStarted) {
                     messageStarted = true;
                     // Add a new message object for the model's response
-                    setMessages(prev => [...prev, { role: 'model', parts: [{ text: chunkText }] }]);
+                    setMessages(prev => [...prev, { role: 'model', parts: [{ text: modelResponse }] }]);
                 } else {
                     // Update the last message (the model's response)
                     setMessages(prev => {
                         const newMessages = [...prev];
-                        if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'model') {
-                             newMessages[newMessages.length - 1].parts = [{ text: chunkText }];
+                        if (newMessages.length > 0) {
+                             newMessages[newMessages.length - 1].parts = [{ text: modelResponse }];
                         }
                         return newMessages;
                     });

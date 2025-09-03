@@ -87,7 +87,7 @@ const PropertyDetailsPage: React.FC<PropertyDetailsPageProps> = ({ property, onB
       try {
         setIsLoadingInfo(true);
         setInfoError(null);
-        const info = await getNeighborhoodInfo(property);
+        const info = await getNeighborhoodInfo(property.location);
         setNeighborhoodInfo(info);
       } catch (error) {
         console.error("Failed to fetch neighborhood info:", error);
@@ -98,7 +98,7 @@ const PropertyDetailsPage: React.FC<PropertyDetailsPageProps> = ({ property, onB
     };
 
     fetchNeighborhoodInfo();
-  }, [property.id]);
+  }, [property.location]);
   
   useEffect(() => {
     const fetchSimilarProperties = async () => {
@@ -405,20 +405,7 @@ const PropertyDetailsPage: React.FC<PropertyDetailsPageProps> = ({ property, onB
                 {neighborhoodInfo && (
                     <div className="space-y-6 animate-fade-in">
                         <p className="text-center text-xl text-gray-800 leading-relaxed bg-white p-6 rounded-xl border border-gray-200 shadow-sm">{neighborhoodInfo.summary}</p>
-                        
-                        {neighborhoodInfo.property_recommendation && (
-                             <div className="mt-8 bg-indigo-50 border-l-4 border-indigo-500 text-indigo-800 p-5 rounded-r-lg shadow-sm">
-                                <div className="flex items-start gap-4">
-                                    <SparklesIcon className="w-8 h-8 text-indigo-500 flex-shrink-0 mt-1" />
-                                    <div>
-                                        <h4 className="font-bold text-lg text-indigo-900">لماذا هذا العقار؟ (رأي المساعد الذكي)</h4>
-                                        <p className="mt-2 text-indigo-700">{neighborhoodInfo.property_recommendation}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             <NeighborhoodInfoCard icon={<LifebuoyIcon className="w-7 h-7 text-indigo-500" />} title="أسلوب الحياة">
                                 <p>{neighborhoodInfo.lifestyle}</p>
                             </NeighborhoodInfoCard>
