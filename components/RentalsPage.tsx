@@ -26,6 +26,9 @@ const RentalsPage: React.FC<RentalsPageProps> = ({ onSelectProperty }) => {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [sortBy, setSortBy] = useState('date_desc');
+  const [bedrooms, setBedrooms] = useState('any');
+  const [bathrooms, setBathrooms] = useState('any');
 
   const [aiSearchTerm, setAiSearchTerm] = useState('');
   const [aiSearchResults, setAiSearchResults] = useState<AIPropertySearchResult[] | null>(null);
@@ -88,6 +91,9 @@ const RentalsPage: React.FC<RentalsPageProps> = ({ onSelectProperty }) => {
     setSearchTerm('');
     setMinPrice('');
     setMaxPrice('');
+    setSortBy('date_desc');
+    setBedrooms('any');
+    setBathrooms('any');
     clearAiSearch();
   };
 
@@ -95,8 +101,9 @@ const RentalsPage: React.FC<RentalsPageProps> = ({ onSelectProperty }) => {
     let props = properties.filter(p => p.status === 'متاح');
 
     if (aiSearchResults) {
+      const propertyMap = new Map(props.map(p => [p.id, p]));
       return aiSearchResults.map(result => {
-        const property = props.find(p => p.id === result.propertyId);
+        const property = propertyMap.get(result.propertyId);
         return property ? { ...property, aiReason: result.reason } : null;
       }).filter((p): p is Property & { aiReason: string } => p !== null);
     }
@@ -110,17 +117,53 @@ const RentalsPage: React.FC<RentalsPageProps> = ({ onSelectProperty }) => {
     const min = parseFloat(minPrice);
     const max = parseFloat(maxPrice);
 
-    return props
-      .filter(p => {
+    const processedProps = props.filter(p => {
         if (searchTerm.trim() !== '' && 
             !p.title.toLowerCase().includes(searchTerm.toLowerCase()) && 
             !p.location.toLowerCase().includes(searchTerm.toLowerCase())) return false;
         if (!isNaN(min) && p.price < min) return false;
         if (!isNaN(max) && p.price > max) return false;
+
+        if (filter === 'سكني') {
+            if (bedrooms !== 'any') {
+                const numBedrooms = parseInt(bedrooms);
+                if (bedrooms === '4+') {
+                    if ((p.bedrooms ?? 0) < 4) return false;
+                } else {
+                    if (p.bedrooms !== numBedrooms) return false;
+                }
+            }
+            if (bathrooms !== 'any') {
+                const numBathrooms = parseInt(bathrooms);
+                if (bathrooms === '3+') {
+                    if ((p.bathrooms ?? 0) < 3) return false;
+                } else {
+                    if (p.bathrooms !== numBathrooms) return false;
+                }
+            }
+        }
+        
         return true;
-      })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [filter, properties, searchTerm, minPrice, maxPrice, aiSearchResults, favoriteIds]);
+      });
+      
+      const sortedProps = [...processedProps];
+
+      switch (sortBy) {
+        case 'price_asc':
+            sortedProps.sort((a, b) => a.price - b.price);
+            break;
+        case 'price_desc':
+            sortedProps.sort((a, b) => b.price - a.price);
+            break;
+        case 'date_desc':
+        default:
+            sortedProps.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            break;
+    }
+
+    return sortedProps;
+
+  }, [filter, properties, searchTerm, minPrice, maxPrice, aiSearchResults, favoriteIds, bedrooms, bathrooms, sortBy]);
 
   const FilterButton: React.FC<{ type: FilterType; label: string; icon?: React.ReactNode }> = ({ type, label, icon }) => (
     <button
@@ -199,7 +242,7 @@ const RentalsPage: React.FC<RentalsPageProps> = ({ onSelectProperty }) => {
                     <label htmlFor="search" className="block text-sm font-bold text-gray-700 mb-2">ابحث بالاسم أو المنطقة</label>
                     <div className="relative">
                         <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none"><MagnifyingGlassIcon className="h-5 w-5 text-gray-400" /></div>
-                        <input type="text" id="search" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} onClick={clearAiSearch} className="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="مثال: شقة في العليا..." />
+                        <input type="text" id="search" value={searchTerm} onChange={(e) => {setSearchTerm(e.target.value); clearAiSearch();} } className="w-full p-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 transition-shadow" placeholder="مثال: شقة في العليا..." />
                     </div>
                 </div>
                 <div>
@@ -214,6 +257,31 @@ const RentalsPage: React.FC<RentalsPageProps> = ({ onSelectProperty }) => {
                      <button onClick={handleResetFilters} className="w-full bg-gray-600 text-white font-bold p-3 rounded-lg hover:bg-gray-700 transition-colors">إعادة تعيين</button>
                 </div>
             </div>
+
+            {filter === 'سكني' && (
+                <div className="border-t border-gray-200 mt-4 pt-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
+                    <div>
+                        <label htmlFor="bedrooms" className="block text-sm font-bold text-gray-700 mb-2">غرف النوم</label>
+                        <select id="bedrooms" value={bedrooms} onChange={(e) => { setBedrooms(e.target.value); clearAiSearch(); }} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 transition-shadow bg-white">
+                            <option value="any">الكل</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4+">4+</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label htmlFor="bathrooms" className="block text-sm font-bold text-gray-700 mb-2">الحمامات</label>
+                        <select id="bathrooms" value={bathrooms} onChange={(e) => { setBathrooms(e.target.value); clearAiSearch(); }} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 transition-shadow bg-white">
+                            <option value="any">الكل</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3+">3+</option>
+                        </select>
+                    </div>
+                </div>
+            )}
+            
             <div className="border-t border-gray-200 mt-6 pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div className="flex justify-center flex-wrap gap-3">
                   <FilterButton type="all" label="الكل" />
@@ -221,13 +289,23 @@ const RentalsPage: React.FC<RentalsPageProps> = ({ onSelectProperty }) => {
                   <FilterButton type="تجاري" label="تجاري" icon={<BuildingOffice2Icon className="w-5 h-5"/>} />
                   <FilterButton type="favorites" label={`المفضلة (${favoriteIds.length})`} icon={<HeartIcon className="w-5 h-5"/>} />
                 </div>
-                <div className="flex items-center gap-2 p-1 bg-gray-200 rounded-full">
-                    <button onClick={() => setViewMode('list')} className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600'}`}>
-                        <QueueListIcon className="w-5 h-5 inline-block ml-1"/> القائمة
-                    </button>
-                    <button onClick={() => setViewMode('map')} className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${viewMode === 'map' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600'}`}>
-                        <MapIcon className="w-5 h-5 inline-block ml-1"/> الخريطة
-                    </button>
+                <div className="flex items-center gap-4">
+                    <div className='flex items-center gap-2'>
+                        <label htmlFor="sortBy" className="text-sm font-bold text-gray-700">ترتيب حسب:</label>
+                        <select id="sortBy" value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 transition-shadow bg-white text-sm font-bold text-gray-600">
+                            <option value="date_desc">الأحدث</option>
+                            <option value="price_asc">السعر: من الأقل للأعلى</option>
+                            <option value="price_desc">السعر: من الأعلى للأقل</option>
+                        </select>
+                    </div>
+                    <div className="flex items-center gap-2 p-1 bg-gray-200 rounded-full">
+                        <button onClick={() => setViewMode('list')} className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600'}`}>
+                            <QueueListIcon className="w-5 h-5 inline-block ml-1"/> القائمة
+                        </button>
+                        <button onClick={() => setViewMode('map')} className={`px-4 py-2 text-sm font-bold rounded-full transition-colors ${viewMode === 'map' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600'}`}>
+                            <MapIcon className="w-5 h-5 inline-block ml-1"/> الخريطة
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
