@@ -76,12 +76,14 @@ const PropertyCard: React.FC<PropertyCardProps> = ({ property, onSelect, aiReaso
         </div>
         
         {aiReason && (
-          <div className="my-4 p-3 bg-indigo-50 border-r-4 border-indigo-400 rounded-r-md">
-            <div className="flex items-start gap-2.5 text-indigo-800">
-                <SparklesIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-indigo-500" />
+          <div className="my-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+            <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-1">
+                    <SparklesIcon className="w-6 h-6 text-indigo-500" />
+                </div>
                 <div>
-                    <h5 className="font-bold text-sm text-indigo-600">لماذا هذا العقار؟</h5>
-                    <p className="text-sm text-gray-700">{aiReason}</p>
+                    <h5 className="font-bold text-indigo-800">توصية الذكاء الاصطناعي</h5>
+                    <p className="text-sm text-gray-800 leading-relaxed mt-1">{aiReason}</p>
                 </div>
             </div>
           </div>

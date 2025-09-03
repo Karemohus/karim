@@ -208,7 +208,7 @@ const RentalsPage: React.FC<RentalsPageProps> = ({ onSelectProperty }) => {
                       value={aiSearchTerm}
                       onChange={(e) => setAiSearchTerm(e.target.value)}
                       className="w-full p-4 border-2 border-transparent rounded-lg focus:ring-4 focus:ring-white/50 transition-shadow text-lg"
-                      placeholder="مثال: شقة بثلاث غرف نوم في شمال الرياض بأقل من 6000 ريال شهرياً"
+                      placeholder="مثال: شقة عائلية في حي هادئ وقريبة من حديقة، أو مكتب قرب المترو..."
                       disabled={isAiSearching}
                   />
               </div>
